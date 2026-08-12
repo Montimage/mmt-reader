@@ -293,7 +293,7 @@ MMT-Reader analyzes network traffic from pcap capture files or live network inte
 - **Dual input modes** — Read from pcap files (offline) or live network interfaces (online)
 - **Per-protocol statistics** — Packet count, data volume, and payload volume for every detected protocol
 - **Protocol path display** — Full DPI path hierarchy (e.g. `TCP.HTTP.Google`) with the `-a/--proto-path` flag
-- **Top-flow reporting** — Identify which hosts/ports consume the most bandwidth with `-F/--flows <seconds>`
+- **Top-flow reporting** — Identify which hosts/ports consume the most bandwidth during a live capture with `capture -F/--flows <seconds>`
 - **JSON output** — Machine-readable statistics with `--json`
 - **Three classification strategies** — IP address (`-x`), hostname (`-y`), and port (`-z`) fingerprinting, each independently toggleable
 - **Real-time monitoring** — Live capture with configurable buffer size (`-b`) and kernel/driver drop reporting
@@ -466,7 +466,7 @@ No root privileges required. Reads and replays traffic deterministically.
 | `-b, --buffer <MB>` | Buffer size in MB | Pcap handler buffer (default: 50) |
 | `-a, --proto-path` | None | Show per-protocol-path statistics |
 | `-s, --sessions` | None | Show per-protocol session counts |
-| `-F, --flows <seconds>` | Seconds | Capture for N seconds, then print top flows by volume |
+| `-F, --flows <seconds>` | Seconds | Capture for N seconds, then print top flows by volume (**capture only** — `analyze` rejects it) |
 | `-j, --json` | None | JSON output format |
 
 Requires root/administrator privileges (or `setcap` on Linux). Supports Ethernet and WiFi interfaces.

@@ -50,7 +50,6 @@ static const char *analyze_help =
 "  -b, --buffer <MB>        PCAP buffer size in MB (default: 50)\n"
 "  -a, --proto-path         Show per-protocol-path statistics\n"
 "  -s, --sessions           Show per-protocol session counts\n"
-"  -F, --flows <seconds>    Capture for <seconds>, then report top flows by volume\n"
 "  -j, --json               Output statistics in JSON format\n"
 "  -T, --text               Explicitly set text output format (default)\n"
 
@@ -425,6 +424,13 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
         opts->input = argv[optind];
         opts->mode  = 2; /* LIVE_INTERFACE */
         has_input   = 1;
+    }
+
+    /* --flows drives a timed live capture, so it only applies to the
+     * 'capture' subcommand — reject it on the offline trace-file path */
+    if (opts->mode == 1 && opts->flows_seconds > 0) {
+        fprintf(stderr, "Error: --flows is only supported by the 'capture' subcommand (live interfaces).\n");
+        parse_error(prog_name);
     }
 
     /* Validate: input is required for both subcommands */

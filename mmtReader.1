@@ -119,7 +119,12 @@ Show per-protocol session counts.
 .B \-F, \-\-flows <seconds>
 Capture for the given number of seconds, then print the top flows by
 transferred volume. Useful to identify which hosts and ports consume the
-most bandwidth. Requires root/cap_net_raw on the interface.
+most bandwidth. Requires root/cap_net_raw on the interface. This option is
+supported by
+.B capture
+only; the
+.B analyze
+subcommand rejects it with a usage error.
 .TP
 .B \-j, \-\-json
 Output statistics in JSON format.
