@@ -75,7 +75,12 @@ test: build
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_flows && rm -f test_flows
 	@echo ""
-	@echo "=== Test 9: Completions exist ==="
+	@echo "=== Test 9: Capture dispatch unit tests ==="
+	gcc -g -o test_capture_dispatch tests/test_capture_dispatch.c capture.c flows.c \
+		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
+		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_capture_dispatch && rm -f test_capture_dispatch
+	@echo ""
+	@echo "=== Test 10: Completions exist ==="
 	@test -f completions/mmtReader.bash && echo "Bash completion OK" || echo "Bash completion missing"
 	@test -f completions/mmtReader.zsh && echo "Zsh completion OK" || echo "Zsh completion missing"
 	@test -f completions/mmtReader.fish && echo "Fish completion OK" || echo "Fish completion missing"

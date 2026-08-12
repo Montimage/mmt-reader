@@ -179,6 +179,10 @@ int main(int argc, char **argv) {
         /* Set callback context: MMT handler + interface datalink type */
         capture_set_context(engine_get_mmt(eng), pcap_datalink(pcap));
 
+        /* Route every captured frame through the engine so packet counts
+         * and timestamps are recorded and the anomaly hook runs */
+        capture_set_processor(engine_process_packet_cb, eng);
+
         /* Optional flow aggregation for top-talker reporting.
          * The capture callback feeds Ethernet-converted frames. */
         flows_t *flows = NULL;
