@@ -29,11 +29,12 @@ typedef enum {
  * Engine statistics snapshot (read-only after processing).
  */
 typedef struct {
-    uint64_t nb_packets;          /**< Total packets processed            */
-    uint64_t nb_ipv4_sessions;    /**< IPv4 sessions created              */
-    uint64_t nb_ipv6_sessions;    /**< IPv6 sessions created              */
-    uint64_t nb_protocols;        /**< Distinct protocols seen            */
-    uint64_t data_volume;         /**< Total data volume in bytes         */
+    uint64_t nb_packets;          /**< Total packets read from the input  */
+    uint64_t nb_ipv4_sessions;    /**< IPv4 sessions seen (MMT-DPI)       */
+    uint64_t nb_ipv6_sessions;    /**< IPv6 sessions seen (MMT-DPI)       */
+    uint64_t nb_active_sessions;  /**< Sessions not yet timed out (DPI)   */
+    uint64_t nb_protocols;        /**< Distinct protocols seen (MMT-DPI)  */
+    uint64_t data_volume;         /**< Total data volume in bytes (DPI)   */
     struct timeval init_time;     /**< First packet timestamp             */
     struct timeval end_time;      /**< Last packet timestamp              */
 } engine_stats_t;

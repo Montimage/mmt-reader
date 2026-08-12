@@ -122,13 +122,13 @@ Protocol statistics:
 >>>>>> INPUT STATISTICS <<<<<<
 
     Packets: 14261
-    Data: 0 bytes
-    Total Sessions: 168
-    Protocols: 0
-    Duration: 298 seconds
-    Bandwidth: 0.00 bytes/second
-    pps: 47.86 packets/second
-    fps: 0.56 sessions/second
+    Data: 9216531 bytes
+    Total Sessions: 679
+    Protocols: 28
+    Duration: 299 seconds
+    Bandwidth: 30875.60 bytes/second
+    pps: 47.77 packets/second
+    fps: 2.27 sessions/second
 ```
 
 ### Explanation
@@ -137,14 +137,14 @@ Protocol statistics:
 |---------|-------------------|----------------|
 | **Protocol path table** | Every distinct DPI path (e.g. `ethernet.ip.tcp.http.msn`) with packet counts, total volume, and payload volume | Reveals *what* applications are talking — not just TCP/UDP but the actual app layer |
 | **Aggregated protocol table** | Totals per protocol name, sorted by packet count | Quick ranking — HTTP dominates at 5,287 packets, MSN second at 3,735 |
-| **Input statistics** | Session count (168), duration (298s), throughput (47.86 pps) | Baseline metrics for the capture — useful for comparison or reporting |
+| **Input statistics** | Session count (679), duration (299s), throughput (47.77 pps) | Baseline metrics for the capture — useful for comparison or reporting |
 
 **Key findings from this experiment:**
 - **HTTP is the dominant protocol** — 5,287 packets (37% of all traffic), 5.7 MB payload
 - **MSN Messenger is the #1 application** — 3,735 packets, 4.0 MB payload — unusual in modern captures, flagging legacy or test traffic
 - **SSL/TLS is significant** — 3,090 packets across 2.6 MB — encrypted traffic needs deeper analysis
 - **"unknown" paths exist** — 20 packets with no DPI match — potential tunneling or novel protocols to investigate
-- **168 sessions in ~5 minutes** — moderate activity, not a flood
+- **679 sessions in ~5 minutes** — moderate activity, not a flood
 - **28 distinct protocols detected** — rich application mix from ethernet to dhcp
 
 ---
@@ -226,13 +226,13 @@ Protocol statistics:
 >>>>>> INPUT STATISTICS <<<<<<
 
     Packets: 14261
-    Data: 0 bytes
-    Total Sessions: 168
-    Protocols: 0
-    Duration: 298 seconds
-    Bandwidth: 0.00 bytes/second
-    pps: 47.86 packets/second
-    fps: 0.56 sessions/second
+    Data: 9216531 bytes
+    Total Sessions: 679
+    Protocols: 28
+    Duration: 299 seconds
+    Bandwidth: 30875.60 bytes/second
+    pps: 47.77 packets/second
+    fps: 2.27 sessions/second
 ```
 
 ### Explanation
@@ -282,12 +282,12 @@ Protocol statistics:
   "version": "1.7.10 (efd353a3)",
   "input_stats": {
     "packets": 14261,
-    "data_volume": 0,
-    "duration_seconds": 298.00,
-    "bandwidth_bytes_per_sec": 0.00,
-    "packets_per_sec": 47.86,
-    "total_sessions": 168,
-    "protocols": 0
+    "data_volume": 9216531,
+    "duration_seconds": 298.51,
+    "bandwidth_bytes_per_sec": 30875.60,
+    "packets_per_sec": 47.77,
+    "total_sessions": 679,
+    "protocols": 28
   },
   "protocol_paths": [
     {"packets": 7, "data_volume": 3392, "payload_volume": 3014, "path": "ethernet.ip.tcp.unknown"},
@@ -457,9 +457,9 @@ Protocol statistics:
 >>>>>> INPUT STATISTICS <<<<<<
 
     Packets: 14261
-    Total Sessions: 168
-    Duration: 298 seconds
-    pps: 47.86 packets/second
+    Total Sessions: 679
+    Duration: 299 seconds
+    pps: 47.77 packets/second
 
 PCAP Statistics:
     Received packets: 14261
@@ -546,27 +546,29 @@ Protocol statistics:
 >>>>>> INPUT STATISTICS <<<<<<
 
     Packets: 14261
-    Data: 0 bytes
-    IPv4 Sessions: 168
+    Data: 9216531 bytes
+    IPv4 Sessions: 679
     IPv6 Sessions: 0
-    Total Sessions: 168
-    Protocols: 0
-    Duration: 298 seconds
-    Bandwidth: 0.00 bytes/second
-    pps: 47.86 packets/second
-    fps: 0.56 sessions/second
+    Active Sessions: 168
+    Total Sessions: 679
+    Protocols: 28
+    Duration: 299 seconds
+    Bandwidth: 30875.60 bytes/second
+    pps: 47.77 packets/second
+    fps: 2.27 sessions/second
 ```
 
 ### Explanation
 
 | Metric | Value | Interpretation |
 |--------|-------|----------------|
-| **Total Sessions** | 168 | Unique network sessions (not per-protocol) |
-| **IPv4 Sessions** | 168 | All sessions are IPv4 (IPv6 = 0) |
+| **Total Sessions** | 679 | Every session seen during the capture |
+| **IPv4 Sessions** | 679 | All sessions are IPv4 (IPv6 = 0) |
 | **IPv6 Sessions** | 0 | No IPv6 traffic in this capture |
-| **Duration** | 298 seconds (~5 min) | Short capture window |
-| **PPS** | 47.86 | ~48 packets/sec — light traffic |
-| **FPS** | 0.56 | ~1 new session every 2 seconds |
+| **Active Sessions** | 168 | Still open at the end; the rest had timed out |
+| **Duration** | 299 seconds (~5 min) | Short capture window |
+| **PPS** | 47.77 | ~48 packets/sec — light traffic |
+| **FPS** | 2.27 | ~2 new sessions per second |
 | **Protocols detected** | 28 distinct | Rich application mix |
 
 ### Audit Report Template
@@ -577,13 +579,13 @@ Use this output to generate a standard audit report:
 === Network Audit Report ===
 Capture: capture.pcap
 Date: $(date +%Y-%m-%d)
-Duration: 298 seconds (4 min 58 sec)
+Duration: 299 seconds (4 min 59 sec)
 
 Traffic Summary:
   Total packets:    14,261
-  Total sessions:   168
-  Avg pps:          47.86
-  Avg fps:          0.56
+  Total sessions:   679
+  Avg pps:          47.77
+  Avg fps:          2.27
 
 Top 5 Protocols by Packets:
   1. HTTP       — 5,287 packets (37.1%)
@@ -686,10 +688,10 @@ The AI agent treats `mmtReader` as a **CLI tool in its toolbox**, just like it w
 **The AI agent responds:**
 
 > This capture has:
-> - **168 total sessions** (all IPv4, 0 IPv6)
-> - **Duration:** 298 seconds (~5 minutes)
+> - **679 total sessions** (all IPv4, 0 IPv6)
+> - **Duration:** 299 seconds (~5 minutes)
 > - **Average session rate:** 0.56 sessions/second (~1 new session every 2 seconds)
-> - **Packet rate:** 47.86 packets/second
+> - **Packet rate:** 47.77 packets/second
 >
 > This is light traffic — typical of a small office or personal network.
 
@@ -807,9 +809,9 @@ All experiments ran on this machine against `smallFlows.pcap` (Aug 12, 2026):
 
 | Experiment | Command | Key Metric |
 |------------|---------|------------|
-| 1 — Forensic Triage | `./mmtReader analyze -t smallFlows.pcap -a` | 28 protocols, 168 sessions, 14,261 packets |
+| 1 — Forensic Triage | `./mmtReader analyze -t smallFlows.pcap -a` | 28 protocols, 679 sessions, 14,261 packets |
 | 2 — Top Talkers | `./mmtReader analyze -t smallFlows.pcap -a -x 0 -y 0` | HTTP at 58% (port-only), many apps undetected |
 | 3 — JSON Pipeline | `./mmtReader analyze -t smallFlows.pcap --json -q -a` | 38 protocol paths, 28 protocols, jq-parseable |
 | 4 — Live Monitor | `sudo ./mmtReader capture eth0 -a -b 100` | Requires live interface — representative output shown |
-| 5 — Session Audit | `./mmtReader analyze -t smallFlows.pcap -s -q` | 168 sessions (all IPv4), 47.86 pps, 0.56 fps |
+| 5 — Session Audit | `./mmtReader analyze -t smallFlows.pcap -s -q` | 679 sessions (all IPv4, 168 still active), 47.77 pps, 2.27 fps |
 | 6 — AI Agent | `./mmtReader analyze -t smallFlows.pcap --json -q -a` | AI parses JSON → natural language answer |

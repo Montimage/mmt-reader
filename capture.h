@@ -10,7 +10,6 @@
 #include <stdint.h>
 #include <pcap.h>
 #include "mmt_core.h"
-#include "flows.h"
 
 /**
  * Initialize a pcap handle for live capture.
@@ -73,14 +72,6 @@ typedef int (*capture_processor_fn)(void *ctx,
  * @param ctx  Opaque context passed back to the processor
  */
 void capture_set_processor(capture_processor_fn fn, void *ctx);
-
-/**
- * Set the flow aggregator fed by the capture callback.
- * May be NULL to disable flow tracking. The aggregator receives the
- * Ethernet-converted frames (WiFi 802.11 frames are converted first).
- * @param flows  Flow aggregator, or NULL
- */
-void capture_set_flows(flows_t *flows);
 
 /**
  * Convert an IEEE 802.11 data frame to an Ethernet frame.

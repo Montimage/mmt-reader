@@ -75,6 +75,55 @@ struct engine {
 /* Module-level proto_path_detail (shared by output_print_stats) */
 static int proto_path_detail = 1;
 
+/* ------------------------------------------------------------------ */
+/* MMT-DPI statistics helpers                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Totals summed over every statistics instance of one protocol.
+ *
+ * MMT-DPI keeps one instance per protocol path a protocol appears in
+ * (eth.ip.tcp.http and eth.ip.tcp.ssl.http are separate), so a protocol
+ * total is the sum over the instance list returned by get_protocol_stats().
+ */
+typedef struct {
+    uint64_t packets;
+    uint64_t volume;
+    uint64_t sessions;
+} proto_totals_t;
+
+static proto_totals_t sum_proto_stats(mmt_handler_t *mmt, uint32_t proto_id) {
+    proto_totals_t totals = { 0, 0, 0 };
+    proto_statistics_t *stats = get_protocol_stats(mmt, proto_id);
+
+    for (; stats != NULL; stats = stats->next) {
+        if (!stats->touched) continue;
+        totals.packets  += stats->packets_count;
+        totals.volume   += stats->data_volume;
+        totals.sessions += stats->sessions_count;
+    }
+    return totals;
+}
+
+/** Context for the distinct-protocol counter below. */
+typedef struct {
+    mmt_handler_t *mmt;
+    uint64_t count;
+} proto_count_ctx_t;
+
+/**
+ * Count a protocol if the DPI saw at least one packet of it.
+ * PROTO_META is the path root, not a protocol on the wire.
+ */
+static void count_touched_protocols(uint32_t proto_id, void *args) {
+    proto_count_ctx_t *ctx = (proto_count_ctx_t *)args;
+
+    if (proto_id == PROTO_META) return;
+    if (sum_proto_stats(ctx->mmt, proto_id).packets > 0) {
+        ctx->count++;
+    }
+}
+
 
 
 /* ------------------------------------------------------------------ */
@@ -210,12 +259,23 @@ void engine_get_stats(const engine_t *eng, engine_stats_t *out) {
     if (eng == NULL || out == NULL) return;
     *out = eng->stats;
 
-    /* Populate session counts from MMT-DPI */
-    uint64_t total_sessions = get_active_session_count(eng->mmt);
-    /* MMT-DPI does not expose per-IP-version session counts.
-     * Report the total in nb_ipv4_sessions for backward compatibility */
-    out->nb_ipv4_sessions = total_sessions;
-    out->nb_ipv6_sessions = 0;
+    /* Everything below is read from MMT-DPI's own accounting rather than
+     * recomputed here. PROTO_META is the root of every protocol path, so
+     * its statistics cover every packet the engine handed to the DPI. */
+    proto_totals_t meta = sum_proto_stats(eng->mmt, PROTO_META);
+    out->data_volume = meta.volume;
+
+    /* Sessions, per IP version, from the IP/IPv6 protocol statistics */
+    out->nb_ipv4_sessions = sum_proto_stats(eng->mmt, PROTO_IP).sessions;
+    out->nb_ipv6_sessions = sum_proto_stats(eng->mmt, PROTO_IPV6).sessions;
+
+    /* Sessions still alive (the rest have timed out) */
+    out->nb_active_sessions = get_active_session_count(eng->mmt);
+
+    /* Distinct protocols seen */
+    proto_count_ctx_t ctx = { eng->mmt, 0 };
+    iterate_through_protocols(count_touched_protocols, &ctx);
+    out->nb_protocols = ctx.count;
 }
 
 void engine_print_stats_ex(const engine_t *eng, FILE *fp,
@@ -223,11 +283,12 @@ void engine_print_stats_ex(const engine_t *eng, FILE *fp,
     if (eng == NULL) return;
 
     /* Get fresh stats from MMT-DPI */
-    engine_get_stats(eng, (engine_stats_t *)&eng->stats);
+    engine_stats_t stats;
+    engine_get_stats(eng, &stats);
 
     /* Delegate output formatting to the output module */
     output_print_stats_ex(fp, eng->mmt, proto_path_detail,
-                          format, show_sessions, &eng->stats);
+                          format, show_sessions, &stats);
 }
 
 void engine_print_stats(const engine_t *eng) {

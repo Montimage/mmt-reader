@@ -101,10 +101,10 @@ Three classification strategies can be independently enabled/disabled:
 ### Attribute Registration
 
 ```c
-iterate_through_protocols(protocols_iterator, mmt_handler);
+register_extraction_attribute(mmt, PROTO_IP, IP_CLIENT_ADDR);
 ```
 
-Iterates all known protocols and registers their attributes for extraction via `register_extraction_attribute()`. This tells MMT-DPI which fields to pull from each packet.
+Attributes are registered only where a report needs them. `flows.c` registers the session endpoints (client/server address and port, for IPv4 and IPv6) when `-F` is used; the protocol tables need no attributes at all, since they read MMT-DPI's protocol statistics directly.
 
 ### Packet Processing
 
@@ -118,10 +118,11 @@ The core DPI call. `engine_process_packet()` (`core/engine.c`) delegates to MMT-
 
 | Callback | Module | Trigger | Purpose |
 |----------|--------|---------|---------|
-| `packet_handler` | core/engine.c | Every processed packet | Updates global counters (packets, data volume, timestamps) |
-| `new_ipv4_session_handler` | core/engine.c | New IPv4 session created | Increments `nb_ipv4_sessions` |
-| `new_ipv6_session_handler` | core/engine.c | New IPv6 session created | Increments `nb_ipv6_sessions` |
-| `engine_live_callback` | core/engine.c | Every raw packet (online) | Converts raw pcap packet to MMT format and calls `engine_process_packet()` |
+| `engine_process_packet_cb` | core/engine.c | Every captured frame (online) | Records the packet in the capture window, then hands it to MMT-DPI |
+| `engine_live_callback` | core/engine.c | Every raw packet (online) | Converts a raw pcap packet to MMT format and calls `engine_process_packet()` |
+| `flows_packet_handler` | flows.c | Every processed packet, when `-F` is used | Records the packet's DPI session for the top-talker report |
+
+Packet, session and volume counters are **not** maintained here: MMT-DPI keeps them, and `engine_get_stats()` reads them back (see below).
 
 ---
 
@@ -136,10 +137,22 @@ engine_print_stats_ex(eng, stdout, OUTPUT_FORMAT_TEXT, show_sessions);
 ```
 
 For each protocol (inside `cli/output.c`):
-1. Gets `proto_statistics_t` via `get_protocol_stats()`
-2. Accumulates `packets_count`, `data_volume`, `payload_volume`
-3. If `-a` is set, retrieves and formats the protocol path hierarchy
+1. Gets `proto_statistics_t` via `get_protocol_stats()` — one instance per protocol path
+2. Accumulates `packets_count`, `data_volume`, `payload_volume`, `sessions_count`
+3. If `-a` is set, formats the path with MMT-DPI's `proto_hierarchy_to_str()`
 4. Creates a `proto_info_t` node and inserts it into a sorted linked list
+
+### Whole-capture Statistics
+
+`engine_get_stats()` (`core/engine.c`) reads the totals back from MMT-DPI rather than counting in parallel:
+
+| Field | Source |
+|-------|--------|
+| `data_volume` | `get_protocol_stats(mmt, PROTO_META)` — the root of every protocol path |
+| `nb_ipv4_sessions` / `nb_ipv6_sessions` | `sessions_count` of `PROTO_IP` / `PROTO_IPV6` |
+| `nb_active_sessions` | `get_active_session_count()` |
+| `nb_protocols` | Protocols with a touched statistics instance, via `iterate_through_protocols()` |
+| `nb_packets`, `init_time`, `end_time` | The input loop — what was read from the file or interface |
 
 ### Sorted Linked List
 
@@ -210,15 +223,14 @@ The `cleaned` guard prevents double-cleanup.
         ▼
   core/engine.c
   ├── engine_process_packet() — MMT-DPI classification + extraction
-  ├── packet_handler() — update counters
-  ├── new_ipv4_session_handler() — count sessions
-  └── new_ipv6_session_handler() — count sessions
+  └── flows.c: flows_packet_handler() — record the session (-F only)
         │
         ▼
   core/engine.c (stats aggregation)
+  ├── engine_get_stats() — totals read back from MMT-DPI
   ├── get_protocol_stats() — per-instance stats
-  ├── proto_hierarchy_ids_to_str() — path formatting
-  └── insert_proto_info() — sorted linked list
+  ├── proto_hierarchy_to_str() — path formatting (MMT-DPI)
+  └── proto_info_insert() — sorted linked list
         │
         ▼
   cli/output.c

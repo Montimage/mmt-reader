@@ -1,13 +1,10 @@
 /**
- * test_flows.c — Unit tests for the flow aggregator in flows.c
+ * test_flows.c — Unit tests for the top-talker report in flows.c
  *
- * Drives flows_packet() with synthetic Ethernet frames built as byte
- * arrays: plain IPv4/IPv6, single and stacked VLAN tags, IPv4 options,
- * IPv6 extension-header chains, TCP and UDP, plus malformed, misaligned
- * and truncated frames that must be handled without reading out of
- * bounds.
- *
- * struct flows is opaque, so every assertion is made against the text
+ * flows.c no longer parses packets: it records the sessions MMT-DPI
+ * opens and ranks them by the DPI's own byte counters. The tests
+ * therefore drive a real MMT handler with synthetic Ethernet frames
+ * (plain IPv4/IPv6, VLAN-tagged, TCP/UDP, ARP) and assert on the report
  * rendered by flows_print_top() into an in-memory stream.
  *
  * Compile: gcc -g -o test_flows tests/test_flows.c flows.c \
@@ -20,6 +17,8 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <sys/time.h>
+#include "mmt_core.h"
 #include "flows.h"
 
 static int tests_run = 0;
@@ -47,9 +46,6 @@ static int tests_fail = 0;
 /* Ethernet header: 6 DA + 6 SA + 2 EtherType */
 #define ETH_HDR_LEN 14
 
-/* Flow-table cap: FLOW_TABLE_SIZE (1 << 11) * 4, see flows.c */
-#define EXPECTED_FLOW_CAP 8192
-
 static void put_be16(u_char *buf, int off, uint16_t v) {
     buf[off]     = (u_char)(v >> 8);
     buf[off + 1] = (u_char)(v & 0xFF);
@@ -61,11 +57,11 @@ static void put_be16(u_char *buf, int off, uint16_t v) {
  * Each tag is 4 bytes: a 2-byte TCI followed by the EtherType of
  * whatever comes next (the following tag, or the L3 protocol).
  *
- * @param buf        Frame buffer (at least FRAME_MAX bytes)
- * @param tpids      Tag protocol IDs, outermost first (NULL for none)
- * @param ntags      Number of tags in tpids
- * @param l3_type    EtherType of the L3 header that follows the tags
- * @return           Offset of the L3 header
+ * @param buf      Frame buffer (at least FRAME_MAX bytes)
+ * @param tpids    Tag protocol IDs, outermost first (NULL for none)
+ * @param ntags    Number of tags in tpids
+ * @param l3_type  EtherType of the L3 header that follows the tags
+ * @return         Offset of the L3 header
  */
 static int build_eth(u_char *buf, const uint16_t *tpids, int ntags, uint16_t l3_type) {
     int i;
@@ -93,6 +89,7 @@ static int build_l4(u_char *buf, int off, uint8_t proto, uint16_t sport, uint16_
         put_be16(buf, off, sport);
         put_be16(buf, off + 2, dport);
         buf[off + 12] = 0x50;              /* data offset 5, no options */
+        buf[off + 13] = 0x02;              /* SYN                       */
         return 20;
     }
     if (proto == IPPROTO_UDP) {
@@ -107,133 +104,106 @@ static int build_l4(u_char *buf, int off, uint8_t proto, uint16_t sport, uint16_
 /**
  * Build an Ethernet + optional VLAN + IPv4 + L4 frame.
  *
- * @param buf       Frame buffer
- * @param tpids     VLAN tag protocol IDs, outermost first (NULL for none)
- * @param ntags     Number of VLAN tags
- * @param ihl_words IPv4 IHL field, in 32-bit words (5 = no options)
- * @param proto     IP protocol number
- * @param src       Source address in dotted-quad form
- * @param dst       Destination address in dotted-quad form
- * @param sport     Source port (TCP/UDP only)
- * @param dport     Destination port (TCP/UDP only)
- * @return          Total frame length
+ * @param buf    Frame buffer
+ * @param tpids  VLAN tag protocol IDs, outermost first (NULL for none)
+ * @param ntags  Number of VLAN tags
+ * @param proto  IP protocol number
+ * @param src    Source address in dotted-quad form
+ * @param dst    Destination address in dotted-quad form
+ * @param sport  Source port (TCP/UDP only)
+ * @param dport  Destination port (TCP/UDP only)
+ * @return       Total frame length
  */
-static int build_ipv4(u_char *buf, const uint16_t *tpids, int ntags,
-                      uint8_t ihl_words, uint8_t proto,
+static int build_ipv4(u_char *buf, const uint16_t *tpids, int ntags, uint8_t proto,
                       const char *src, const char *dst,
                       uint16_t sport, uint16_t dport) {
     int l3 = build_eth(buf, tpids, ntags, 0x0800);
-    int ip_len = ihl_words * 4;
-    int l4 = l3 + ip_len;
+    int l4 = l3 + 20;
     int l4_len;
 
-    buf[l3]     = (u_char)(0x40 | ihl_words);
+    buf[l3]     = 0x45;                    /* version 4, IHL 5 */
     buf[l3 + 8] = 64;                      /* TTL   */
     buf[l3 + 9] = proto;
     inet_pton(AF_INET, src, &buf[l3 + 12]);
     inet_pton(AF_INET, dst, &buf[l3 + 16]);
 
     l4_len = build_l4(buf, l4, proto, sport, dport);
-    put_be16(buf, l3 + 2, (uint16_t)(ip_len + l4_len));
+    put_be16(buf, l3 + 2, (uint16_t)(20 + l4_len));
 
     return l4 + l4_len;
 }
 
 /**
- * Build an Ethernet + IPv6 + optional extension headers + L4 frame.
+ * Build an Ethernet + IPv6 + L4 frame.
  *
- * Every extension header written is 8 bytes long.
- *
- * @param buf     Frame buffer
- * @param src     Source address in presentation form
- * @param dst     Destination address in presentation form
- * @param exts    Extension header protocol numbers, in chain order
- * @param nexts   Number of extension headers
- * @param proto   Final (L4) protocol number
- * @param sport   Source port (TCP/UDP only)
- * @param dport   Destination port (TCP/UDP only)
- * @return        Total frame length
+ * @param buf    Frame buffer
+ * @param src    Source address in presentation form
+ * @param dst    Destination address in presentation form
+ * @param proto  L4 protocol number
+ * @param sport  Source port
+ * @param dport  Destination port
+ * @return       Total frame length
  */
 static int build_ipv6(u_char *buf, const char *src, const char *dst,
-                      const uint8_t *exts, int nexts, uint8_t proto,
-                      uint16_t sport, uint16_t dport) {
+                      uint8_t proto, uint16_t sport, uint16_t dport) {
     int l3 = build_eth(buf, NULL, 0, 0x86DD);
     int off = l3 + 40;
-    int i;
     int l4_len;
 
     buf[l3]     = 0x60;                    /* version 6 */
-    buf[l3 + 6] = (nexts > 0) ? exts[0] : proto;
+    buf[l3 + 6] = proto;                   /* next header */
     buf[l3 + 7] = 64;                      /* hop limit */
     inet_pton(AF_INET6, src, &buf[l3 + 8]);
     inet_pton(AF_INET6, dst, &buf[l3 + 24]);
 
-    for (i = 0; i < nexts; i++) {
-        buf[off]     = (i + 1 < nexts) ? exts[i + 1] : proto;
-        buf[off + 1] = 0;                  /* (0 + 1) * 8 = 8 bytes */
-        off += 8;
+    l4_len = build_l4(buf, off, proto, sport, dport);
+    put_be16(buf, l3 + 4, (uint16_t)l4_len);
+
+    return off + l4_len;
+}
+
+/* ------------------------------------------------------------------ */
+/* Test fixture: an MMT handler with an attached aggregator            */
+/* ------------------------------------------------------------------ */
+
+typedef struct {
+    mmt_handler_t *mmt;
+    flows_t *flows;
+    uint32_t seconds;    /**< Timestamp of the next frame fed */
+} fixture_t;
+
+static int fixture_init(fixture_t *fx) {
+    char errbuf[1024];
+
+    fx->mmt = mmt_init_handler(DLT_EN10MB, 0, errbuf);
+    if (fx->mmt == NULL) {
+        printf("FAIL: mmt_init_handler: %s\n", errbuf);
+        return 0;
     }
-
-    l4_len = build_l4(buf, off, proto, sport, dport);
-    put_be16(buf, l3 + 4, (uint16_t)(off - (l3 + 40) + l4_len));
-
-    return off + l4_len;
+    fx->flows = flows_create();
+    if (fx->flows == NULL) {
+        printf("FAIL: flows_create returned NULL\n");
+        return 0;
+    }
+    fx->seconds = 1000;
+    return flows_attach(fx->flows, fx->mmt);
 }
 
-/**
- * Build an Ethernet + IPv6 + one extension header + L4 frame, with the
- * extension header's length byte and its real size chosen separately.
- *
- * This lets a test write a length byte that does not match the bytes the
- * header actually occupies — a Fragment header's reserved byte, or an
- * Authentication Header whose length is counted in 4-byte units.
- *
- * @param buf       Frame buffer
- * @param src       Source address in presentation form
- * @param dst       Destination address in presentation form
- * @param ext       Extension header protocol number
- * @param len_byte  Value written to the header's second byte
- * @param ext_len   Bytes the extension header actually occupies
- * @param proto     Final (L4) protocol number
- * @param sport     Source port
- * @param dport     Destination port
- * @return          Total frame length
- */
-static int build_ipv6_ext1(u_char *buf, const char *src, const char *dst,
-                           uint8_t ext, uint8_t len_byte, int ext_len,
-                           uint8_t proto, uint16_t sport, uint16_t dport) {
-    int l3 = build_eth(buf, NULL, 0, 0x86DD);
-    int off = l3 + 40;
-    int l4_len;
-
-    buf[l3]     = 0x60;                    /* version 6 */
-    buf[l3 + 6] = ext;
-    buf[l3 + 7] = 64;                      /* hop limit */
-    inet_pton(AF_INET6, src, &buf[l3 + 8]);
-    inet_pton(AF_INET6, dst, &buf[l3 + 24]);
-
-    buf[off]     = proto;
-    buf[off + 1] = len_byte;
-    off += ext_len;
-
-    l4_len = build_l4(buf, off, proto, sport, dport);
-    put_be16(buf, l3 + 4, (uint16_t)(ext_len + l4_len));
-
-    return off + l4_len;
+static void fixture_close(fixture_t *fx) {
+    flows_destroy(fx->flows);
+    mmt_close_handler(fx->mmt);
 }
-
-/* ------------------------------------------------------------------ */
-/* Output capture & inspection                                         */
-/* ------------------------------------------------------------------ */
 
 /** Feed one frame with explicit caplen and wire length. */
-static void feed(flows_t *f, const u_char *frame, uint32_t caplen, uint32_t wire_len) {
-    struct pcap_pkthdr hdr;
+static void feed(fixture_t *fx, const u_char *frame, uint32_t caplen, uint32_t wire_len) {
+    struct pkthdr hdr;
 
     memset(&hdr, 0, sizeof(hdr));
+    hdr.ts.tv_sec  = fx->seconds++;
+    hdr.ts.tv_usec = 0;
     hdr.caplen = caplen;
     hdr.len    = wire_len;
-    flows_packet(f, &hdr, frame);
+    packet_process(fx->mmt, &hdr, (u_char *)frame);
 }
 
 /** Render the top flows into a heap buffer. Caller frees. */
@@ -249,13 +219,7 @@ static char *render(flows_t *f, int top_n) {
     return buf;
 }
 
-static int is_proto_name(const char *tok) {
-    return strcmp(tok, "tcp") == 0 || strcmp(tok, "udp") == 0 ||
-           strcmp(tok, "icmp") == 0 || strcmp(tok, "icmpv6") == 0 ||
-           strcmp(tok, "ip") == 0;
-}
-
-/** Count the data rows in rendered output (the header row is skipped). */
+/** Count the data rows in rendered output (header rows are skipped). */
 static int count_rows(const char *out) {
     int n = 0;
     const char *p = out;
@@ -264,863 +228,309 @@ static int count_rows(const char *out) {
         const char *eol = strchr(p, '\n');
         size_t len = (eol != NULL) ? (size_t)(eol - p) : strlen(p);
         char line[256];
-        char tok[16];
 
         if (len >= sizeof(line)) len = sizeof(line) - 1;
         memcpy(line, p, len);
         line[len] = '\0';
-        if (sscanf(line, "%15s", tok) == 1 && is_proto_name(tok)) n++;
+        /* A data row carries an endpoint, which the headers never do */
+        if (strchr(line, ':') != NULL && strstr(line, "TOP FLOWS") == NULL) n++;
         p = (eol != NULL) ? eol + 1 : NULL;
     }
     return n;
 }
 
 /**
- * Test whether the rendered output contains exactly this flow row.
- *
- * The row is rebuilt with the same format string flows_print_top() uses,
- * so a mismatch in any field — including byte and packet counters —
- * fails the lookup.
+ * Test whether the report contains a flow between these endpoints with
+ * exactly these counters. The protocol column is left to the DPI's
+ * classifier and is not part of the match.
  */
-static int has_flow(const char *out, const char *proto,
-                    const char *src, const char *sport,
-                    const char *dst, const char *dport,
+static int has_flow(const char *out, const char *client, const char *server,
                     unsigned long bytes, unsigned long pkts) {
-    char want[512];
+    char want[256];
 
-    snprintf(want, sizeof(want), "%6s %12s %-7s %12s %-7s %12lu %10lu\n",
-             proto, src, sport, dst, dport, bytes, pkts);
+    snprintf(want, sizeof(want), "%-24s %-24s %12lu %10lu\n",
+             client, server, bytes, pkts);
     return strstr(out, want) != NULL;
 }
 
 /* ------------------------------------------------------------------ */
-/* Plain Ethernet frames                                               */
+/* Sessions                                                            */
 /* ------------------------------------------------------------------ */
 
-/* Ethernet + IPv4 + TCP: one flow with the expected 5-tuple and counters */
+/* One IPv4/TCP packet: one flow, client first, counters from the DPI */
 static void test_ipv4_tcp_basic(void) {
     u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP,
-                            "10.0.0.1", "10.0.0.2", 1234, 80);
-
-    ASSERT_TRUE(f != NULL, "flows_create returns a handle");
-    feed(f, frame, (uint32_t)caplen, 100);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "IPv4/TCP frame records one flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.0.0.1", "1234", "10.0.0.2", "80", 100, 1),
-                "IPv4/TCP 5-tuple, bytes and packets are correct");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* Byte counters use the wire length (hdr->len), not the captured length */
-static void test_bytes_use_wire_length(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP,
-                            "10.0.0.1", "10.0.0.2", 1234, 80);
-
-    /* Snapshot length 1500 while only caplen bytes were captured */
-    feed(f, frame, (uint32_t)caplen, 1500);
-
-    out = render(f, 10);
-    ASSERT_TRUE(has_flow(out, "tcp", "10.0.0.1", "1234", "10.0.0.2", "80", 1500, 1),
-                "byte counter uses the wire length, not caplen");
-    ASSERT_TRUE(!has_flow(out, "tcp", "10.0.0.1", "1234", "10.0.0.2", "80",
-                          (unsigned long)caplen, 1),
-                "byte counter is not the captured length");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* Two packets on the same 5-tuple aggregate into one flow */
-static void test_same_tuple_aggregates(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP,
-                            "192.168.1.10", "192.168.1.20", 40000, 443);
-
-    feed(f, frame, (uint32_t)caplen, 100);
-    feed(f, frame, (uint32_t)caplen, 250);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "two packets on one 5-tuple make one flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "192.168.1.10", "40000", "192.168.1.20", "443", 350, 2),
-                "aggregated flow has packets=2 and the summed byte count");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* Flows are unidirectional: the reverse 5-tuple is a separate flow */
-static void test_reverse_tuple_is_separate(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
+    fixture_t fx;
     char *out;
     int caplen;
 
-    caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP,
-                        "10.0.0.1", "10.0.0.2", 1234, 80);
-    feed(f, frame, (uint32_t)caplen, 100);
-    caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP,
-                        "10.0.0.2", "10.0.0.1", 80, 1234);
-    feed(f, frame, (uint32_t)caplen, 200);
+    ASSERT_TRUE(fixture_init(&fx), "flows_attach registers with the handler");
+    caplen = build_ipv4(frame, NULL, 0, IPPROTO_TCP, "10.0.0.1", "10.0.0.2", 1234, 80);
+    feed(&fx, frame, (uint32_t)caplen, 100);
 
-    out = render(f, 10);
-    ASSERT_EQ(2, count_rows(out), "reverse direction is tracked as its own flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.0.0.1", "1234", "10.0.0.2", "80", 100, 1),
-                "forward direction keeps its own counters");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.0.0.2", "80", "10.0.0.1", "1234", 200, 1),
-                "reverse direction keeps its own counters");
+    out = render(fx.flows, 10);
+    ASSERT_EQ(1, count_rows(out), "IPv4/TCP packet opens one session");
+    ASSERT_TRUE(has_flow(out, "10.0.0.1:1234", "10.0.0.2:80", 100, 1),
+                "endpoints and counters come from the session");
 
     free(out);
-    flows_destroy(f);
+    fixture_close(&fx);
 }
 
-/* UDP ports are resolved just like TCP ports */
+/* Byte counters follow the wire length, not the captured length */
+static void test_bytes_use_wire_length(void) {
+    u_char frame[FRAME_MAX];
+    fixture_t fx;
+    char *out;
+    int caplen;
+
+    ASSERT_TRUE(fixture_init(&fx), "fixture is ready");
+    caplen = build_ipv4(frame, NULL, 0, IPPROTO_TCP, "10.0.0.1", "10.0.0.2", 1234, 80);
+    /* Snapshot length 1500 while only caplen bytes were captured */
+    feed(&fx, frame, (uint32_t)caplen, 1500);
+
+    out = render(fx.flows, 10);
+    ASSERT_TRUE(has_flow(out, "10.0.0.1:1234", "10.0.0.2:80", 1500, 1),
+                "byte counter uses the wire length, not caplen");
+
+    free(out);
+    fixture_close(&fx);
+}
+
+/* Both directions of a conversation are one session, counted together */
+static void test_both_directions_are_one_flow(void) {
+    u_char frame[FRAME_MAX];
+    fixture_t fx;
+    char *out;
+    int caplen;
+
+    ASSERT_TRUE(fixture_init(&fx), "fixture is ready");
+
+    caplen = build_ipv4(frame, NULL, 0, IPPROTO_TCP,
+                        "192.168.1.10", "192.168.1.20", 40000, 443);
+    feed(&fx, frame, (uint32_t)caplen, 100);
+    caplen = build_ipv4(frame, NULL, 0, IPPROTO_TCP,
+                        "192.168.1.20", "192.168.1.10", 443, 40000);
+    feed(&fx, frame, (uint32_t)caplen, 250);
+
+    out = render(fx.flows, 10);
+    ASSERT_EQ(1, count_rows(out), "the reply joins the session, not a second flow");
+    ASSERT_TRUE(has_flow(out, "192.168.1.10:40000", "192.168.1.20:443", 350, 2),
+                "both directions are summed, client stays the session opener");
+
+    free(out);
+    fixture_close(&fx);
+}
+
+/* Repeated packets on one session keep aggregating */
+static void test_same_session_aggregates(void) {
+    u_char frame[FRAME_MAX];
+    fixture_t fx;
+    char *out;
+    int caplen;
+
+    ASSERT_TRUE(fixture_init(&fx), "fixture is ready");
+    caplen = build_ipv4(frame, NULL, 0, IPPROTO_TCP,
+                        "192.168.1.10", "192.168.1.20", 40000, 443);
+    feed(&fx, frame, (uint32_t)caplen, 100);
+    feed(&fx, frame, (uint32_t)caplen, 250);
+
+    out = render(fx.flows, 10);
+    ASSERT_EQ(1, count_rows(out), "two packets on one session make one flow");
+    ASSERT_TRUE(has_flow(out, "192.168.1.10:40000", "192.168.1.20:443", 350, 2),
+                "packets and bytes accumulate on the session");
+
+    free(out);
+    fixture_close(&fx);
+}
+
+/* UDP ports are reported just like TCP ports */
 static void test_ipv4_udp(void) {
     u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
+    fixture_t fx;
     char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_UDP,
-                            "172.16.0.5", "8.8.8.8", 5353, 53);
+    int caplen;
 
-    feed(f, frame, (uint32_t)caplen, 80);
+    ASSERT_TRUE(fixture_init(&fx), "fixture is ready");
+    caplen = build_ipv4(frame, NULL, 0, IPPROTO_UDP, "172.16.0.5", "8.8.8.8", 5353, 53);
+    feed(&fx, frame, (uint32_t)caplen, 80);
 
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "IPv4/UDP frame records one flow");
-    ASSERT_TRUE(has_flow(out, "udp", "172.16.0.5", "5353", "8.8.8.8", "53", 80, 1),
-                "IPv4/UDP ports are parsed");
+    out = render(fx.flows, 10);
+    ASSERT_EQ(1, count_rows(out), "IPv4/UDP packet opens one session");
+    ASSERT_TRUE(has_flow(out, "172.16.0.5:5353", "8.8.8.8:53", 80, 1),
+                "UDP ports are reported");
 
     free(out);
-    flows_destroy(f);
+    fixture_close(&fx);
 }
 
-/* ICMP has no ports: it aggregates per IP pair and prints "-" */
-static void test_ipv4_icmp_has_no_ports(void) {
+/* Distinct 5-tuples are distinct sessions */
+static void test_distinct_sessions(void) {
     u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
+    fixture_t fx;
     char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_ICMP,
-                            "10.1.1.1", "10.1.1.2", 0, 0);
+    int caplen;
 
-    feed(f, frame, (uint32_t)caplen, 98);
+    ASSERT_TRUE(fixture_init(&fx), "fixture is ready");
+    caplen = build_ipv4(frame, NULL, 0, IPPROTO_TCP, "10.0.0.1", "10.0.0.2", 1111, 80);
+    feed(&fx, frame, (uint32_t)caplen, 100);
+    caplen = build_ipv4(frame, NULL, 0, IPPROTO_TCP, "10.0.0.1", "10.0.0.2", 2222, 80);
+    feed(&fx, frame, (uint32_t)caplen, 200);
 
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "ICMP frame records one flow");
-    ASSERT_TRUE(has_flow(out, "icmp", "10.1.1.1", "-", "10.1.1.2", "-", 98, 1),
-                "ICMP flow prints \"-\" for both ports");
+    out = render(fx.flows, 10);
+    ASSERT_EQ(2, count_rows(out), "a different source port is a different session");
+    ASSERT_TRUE(has_flow(out, "10.0.0.1:1111", "10.0.0.2:80", 100, 1),
+                "the first session keeps its own counters");
+    ASSERT_TRUE(has_flow(out, "10.0.0.1:2222", "10.0.0.2:80", 200, 1),
+                "the second session keeps its own counters");
 
     free(out);
-    flows_destroy(f);
+    fixture_close(&fx);
 }
 
-/* ------------------------------------------------------------------ */
-/* VLAN tags                                                           */
-/* ------------------------------------------------------------------ */
-
-/* A single 802.1Q tag (0x8100) shifts the IPv4 header by 4 bytes */
-static void test_single_vlan(void) {
+/* The DPI strips VLAN tags, so the endpoints are unchanged by them */
+static void test_vlan_tagged(void) {
     u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    uint16_t tpids[1] = { 0x8100 };
-    int caplen = build_ipv4(frame, tpids, 1, 5, IPPROTO_TCP,
-                            "10.2.0.1", "10.2.0.2", 1111, 22);
-
-    feed(f, frame, (uint32_t)caplen, 120);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "802.1Q frame records one flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.2.0.1", "1111", "10.2.0.2", "22", 120, 1),
-                "802.1Q tag is skipped and the 5-tuple is correct");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* QinQ: an 802.1ad (0x88A8) outer tag with an 802.1Q inner tag */
-static void test_qinq_88a8_8100(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
+    fixture_t fx;
     char *out;
     uint16_t tpids[2] = { 0x88A8, 0x8100 };
-    int caplen = build_ipv4(frame, tpids, 2, 5, IPPROTO_UDP,
-                            "10.3.0.1", "10.3.0.2", 2222, 161);
+    int caplen;
 
-    feed(f, frame, (uint32_t)caplen, 140);
+    ASSERT_TRUE(fixture_init(&fx), "fixture is ready");
+    caplen = build_ipv4(frame, tpids, 2, IPPROTO_TCP, "10.2.0.1", "10.2.0.2", 1111, 22);
+    feed(&fx, frame, (uint32_t)caplen, 120);
 
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "QinQ 0x88A8+0x8100 frame records one flow");
-    ASSERT_TRUE(has_flow(out, "udp", "10.3.0.1", "2222", "10.3.0.2", "161", 140, 1),
-                "both QinQ tags are skipped and the 5-tuple is correct");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* Stacked 802.1Q tags (0x8100 twice) */
-static void test_stacked_8100_8100(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    uint16_t tpids[2] = { 0x8100, 0x8100 };
-    int caplen = build_ipv4(frame, tpids, 2, 5, IPPROTO_TCP,
-                            "10.4.0.1", "10.4.0.2", 3333, 8080);
-
-    feed(f, frame, (uint32_t)caplen, 160);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "stacked 0x8100+0x8100 frame records one flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.4.0.1", "3333", "10.4.0.2", "8080", 160, 1),
-                "both stacked 802.1Q tags are skipped");
+    out = render(fx.flows, 10);
+    ASSERT_EQ(1, count_rows(out), "a QinQ frame opens one session");
+    ASSERT_TRUE(has_flow(out, "10.2.0.1:1111", "10.2.0.2:22", 120, 1),
+                "VLAN tags do not disturb the endpoints");
 
     free(out);
-    flows_destroy(f);
+    fixture_close(&fx);
 }
 
-/* Three stacked tags, including the legacy 0x9100 TPID */
-static void test_triple_vlan_9100(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    uint16_t tpids[3] = { 0x9100, 0x88A8, 0x8100 };
-    int caplen = build_ipv4(frame, tpids, 3, 5, IPPROTO_TCP,
-                            "10.5.0.1", "10.5.0.2", 4444, 25);
-
-    feed(f, frame, (uint32_t)caplen, 180);
-
-    out = render(f, 10);
-    ASSERT_TRUE(has_flow(out, "tcp", "10.5.0.1", "4444", "10.5.0.2", "25", 180, 1),
-                "three stacked VLAN tags (incl. 0x9100) are skipped");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* A VLAN tag with no room for the tag itself leaves the ethertype unresolved */
-static void test_vlan_truncated_tag(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    uint16_t tpids[1] = { 0x8100 };
-
-    build_ipv4(frame, tpids, 1, 5, IPPROTO_TCP, "10.6.0.1", "10.6.0.2", 1, 2);
-
-    /* Only 2 of the tag's 4 bytes captured — parse_vlan must not read them */
-    feed(f, frame, ETH_HDR_LEN + 2, 200);
-
-    out = render(f, 10);
-    ASSERT_EQ(0, count_rows(out), "truncated VLAN tag records no flow");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* ------------------------------------------------------------------ */
-/* IPv4 header-length handling                                         */
-/* ------------------------------------------------------------------ */
-
-/* IHL 8 (20 bytes of options): ports must be read 12 bytes further along */
-static void test_ipv4_options_ihl8(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 8, IPPROTO_TCP,
-                            "10.7.0.1", "10.7.0.2", 5555, 993);
-
-    feed(f, frame, (uint32_t)caplen, 220);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "IPv4 with options records one flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.7.0.1", "5555", "10.7.0.2", "993", 220, 1),
-                "ports are read at the IHL-derived offset, not a fixed 20");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* IHL 15 (60 bytes), the maximum, with UDP behind the options */
-static void test_ipv4_options_ihl15(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 15, IPPROTO_UDP,
-                            "10.8.0.1", "10.8.0.2", 6666, 123);
-
-    feed(f, frame, (uint32_t)caplen, 240);
-
-    out = render(f, 10);
-    ASSERT_TRUE(has_flow(out, "udp", "10.8.0.1", "6666", "10.8.0.2", "123", 240, 1),
-                "maximum IHL of 15 words is honoured");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* IHL below 5 is illegal — the frame must be dropped, not parsed */
-static void test_ipv4_ihl_too_small(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP,
-                            "10.9.0.1", "10.9.0.2", 7777, 80);
-    int i;
-
-    for (i = 0; i <= 4; i++) {
-        frame[ETH_HDR_LEN] = (u_char)(0x40 | i);
-        feed(f, frame, (uint32_t)caplen, 100);
-    }
-
-    out = render(f, 10);
-    ASSERT_EQ(0, count_rows(out), "IPv4 with IHL < 5 is rejected");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* IHL pointing past the captured bytes must be rejected */
-static void test_ipv4_ihl_past_caplen(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP,
-                            "10.10.0.1", "10.10.0.2", 8888, 80);
-
-    /* Claim a 60-byte header inside a 54-byte frame */
-    frame[ETH_HDR_LEN] = 0x4F;
-    feed(f, frame, (uint32_t)caplen, 100);
-
-    out = render(f, 10);
-    ASSERT_EQ(0, count_rows(out), "IPv4 whose IHL runs past caplen is rejected");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* ------------------------------------------------------------------ */
-/* IPv6                                                                */
-/* ------------------------------------------------------------------ */
-
-/* IPv6 with TCP directly in the next-header field */
+/* IPv6 sessions are reported with their addresses in presentation form */
 static void test_ipv6_tcp(void) {
     u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
+    fixture_t fx;
     char *out;
-    int caplen = build_ipv6(frame, "2001:db8::1", "2001:db8::2", NULL, 0,
-                            IPPROTO_TCP, 9999, 443);
+    int caplen;
 
-    feed(f, frame, (uint32_t)caplen, 300);
+    ASSERT_TRUE(fixture_init(&fx), "fixture is ready");
+    caplen = build_ipv6(frame, "2001:db8::1", "2001:db8::2", IPPROTO_TCP, 9999, 443);
+    feed(&fx, frame, (uint32_t)caplen, 300);
 
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "IPv6/TCP frame records one flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::1", "9999", "2001:db8::2", "443", 300, 1),
-                "IPv6/TCP 5-tuple is correct");
+    out = render(fx.flows, 10);
+    ASSERT_EQ(1, count_rows(out), "IPv6/TCP packet opens one session");
+    ASSERT_TRUE(has_flow(out, "[2001:db8::1]:9999", "[2001:db8::2]:443", 300, 1),
+                "IPv6 endpoints are reported, bracketed before the port");
 
     free(out);
-    flows_destroy(f);
+    fixture_close(&fx);
 }
 
-/* IPv6 with UDP */
-static void test_ipv6_udp(void) {
+/* Traffic with no session behind it (ARP) is not a flow */
+static void test_non_ip_traffic(void) {
     u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    int caplen = build_ipv6(frame, "fe80::1", "fe80::2", NULL, 0,
-                            IPPROTO_UDP, 546, 547);
-
-    feed(f, frame, (uint32_t)caplen, 90);
-
-    out = render(f, 10);
-    ASSERT_TRUE(has_flow(out, "udp", "fe80::1", "546", "fe80::2", "547", 90, 1),
-                "IPv6/UDP ports are parsed");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* A Hop-by-Hop extension header is walked before the TCP header */
-static void test_ipv6_hopopts_chain(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    uint8_t exts[1] = { IPPROTO_HOPOPTS };
-    int caplen = build_ipv6(frame, "2001:db8::10", "2001:db8::20", exts, 1,
-                            IPPROTO_TCP, 1010, 8443);
-
-    feed(f, frame, (uint32_t)caplen, 320);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "IPv6 with Hop-by-Hop records one flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::10", "1010", "2001:db8::20", "8443", 320, 1),
-                "Hop-by-Hop header is skipped and TCP ports are found");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* A longer chain: Hop-by-Hop, Routing, Destination Options, then UDP */
-static void test_ipv6_multi_ext_chain(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    uint8_t exts[3] = { IPPROTO_HOPOPTS, IPPROTO_ROUTING, IPPROTO_DSTOPTS };
-    int caplen = build_ipv6(frame, "2001:db8::30", "2001:db8::40", exts, 3,
-                            IPPROTO_UDP, 2020, 4500);
-
-    feed(f, frame, (uint32_t)caplen, 340);
-
-    out = render(f, 10);
-    ASSERT_TRUE(has_flow(out, "udp", "2001:db8::30", "2020", "2001:db8::40", "4500", 340, 1),
-                "a three-header extension chain is walked to the UDP header");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/*
- * A Fragment header is a fixed 8 bytes and its second byte is reserved,
- * not a header length, so the value of that byte must not change how far
- * the walk advances.
- */
-static void test_ipv6_fragment_reserved_byte(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    uint8_t exts[1] = { IPPROTO_FRAGMENT };
-    int caplen = build_ipv6(frame, "2001:db8::50", "2001:db8::60", exts, 1,
-                            IPPROTO_TCP, 3030, 80);
-
-    /* Reserved byte 0 */
-    feed(f, frame, (uint32_t)caplen, 360);
-    out = render(f, 10);
-    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::50", "3030", "2001:db8::60", "80", 360, 1),
-                "Fragment header with a zero reserved byte parses correctly");
-    free(out);
-    flows_destroy(f);
-
-    /* Reserved byte 1: still exactly 8 bytes, so the ports are still found */
-    f = flows_create();
-    frame[ETH_HDR_LEN + 40 + 1] = 1;
-    feed(f, frame, (uint32_t)caplen, 360);
-    out = render(f, 10);
-    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::50", "3030", "2001:db8::60", "80", 360, 1),
-                "Fragment header with a non-zero reserved byte keeps the ports");
-    free(out);
-    flows_destroy(f);
-}
-
-/* The reserved byte is ignored whatever its value, including 0xFF */
-static void test_ipv6_fragment_nonzero_reserved(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    int caplen = build_ipv6_ext1(frame, "2001:db8::51", "2001:db8::61",
-                                 IPPROTO_FRAGMENT, 0xFF, 8,
-                                 IPPROTO_TCP, 3031, 443);
-
-    feed(f, frame, (uint32_t)caplen, 362);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "Fragment header with reserved byte 0xFF records one flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::51", "3031", "2001:db8::61", "443", 362, 1),
-                "a 0xFF reserved byte still advances exactly 8 bytes");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* A Fragment header followed by Hop-by-Hop, then TCP */
-static void test_ipv6_fragment_then_hopopts(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    uint8_t exts[2] = { IPPROTO_FRAGMENT, IPPROTO_HOPOPTS };
-    int caplen = build_ipv6(frame, "2001:db8::52", "2001:db8::62", exts, 2,
-                            IPPROTO_TCP, 3032, 8080);
-
-    /* A non-zero reserved byte in the Fragment header must not shift the chain */
-    frame[ETH_HDR_LEN + 40 + 1] = 0x2A;
-    feed(f, frame, (uint32_t)caplen, 364);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "Fragment + Hop-by-Hop chain records one flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::52", "3032", "2001:db8::62", "8080", 364, 1),
-                "the walk continues past a Fragment header into Hop-by-Hop");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* An Authentication Header is measured in 4-byte units, biased by 2 */
-static void test_ipv6_auth_header(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    /* Payload Len 4 => (4 + 2) * 4 = 24 bytes: AH with a 96-bit ICV */
-    int caplen = build_ipv6_ext1(frame, "2001:db8::53", "2001:db8::63",
-                                 IPPROTO_AH, 4, 24,
-                                 IPPROTO_TCP, 3033, 22);
-
-    feed(f, frame, (uint32_t)caplen, 366);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "IPv6 with an AH header records one flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::53", "3033", "2001:db8::63", "22", 366, 1),
-                "AH length is read in 4-byte units and the TCP ports follow it");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* ESP is encrypted: the parser must stop there rather than guess at ports */
-static void test_ipv6_esp_stops_walk(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    uint8_t exts[1] = { IPPROTO_ESP };
-    int caplen = build_ipv6(frame, "2001:db8::54", "2001:db8::64", exts, 1,
-                            IPPROTO_TCP, 3034, 80);
-
-    feed(f, frame, (uint32_t)caplen, 368);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "IPv6 with ESP records one flow");
-    ASSERT_TRUE(has_flow(out, "ip", "2001:db8::54", "-", "2001:db8::64", "-", 368, 1),
-                "ESP is recorded as its own protocol with no ports");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* An extension header claiming to run past the captured bytes is dropped */
-static void test_ipv6_ext_past_caplen(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    uint8_t exts[1] = { IPPROTO_HOPOPTS };
-    int caplen = build_ipv6(frame, "2001:db8::70", "2001:db8::80", exts, 1,
-                            IPPROTO_TCP, 4040, 80);
-
-    /* Claim (31 + 1) * 8 = 256 bytes of options in a 82-byte frame */
-    frame[ETH_HDR_LEN + 40 + 1] = 31;
-    feed(f, frame, (uint32_t)caplen, 380);
-
-    out = render(f, 10);
-    ASSERT_EQ(0, count_rows(out), "IPv6 extension header past caplen is rejected");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* An IPv6 header cut short of its 40 bytes is dropped */
-static void test_ipv6_truncated_header(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
+    fixture_t fx;
     char *out;
 
-    build_ipv6(frame, "2001:db8::90", "2001:db8::a0", NULL, 0, IPPROTO_TCP, 1, 2);
-    feed(f, frame, ETH_HDR_LEN + 39, 400);
+    ASSERT_TRUE(fixture_init(&fx), "fixture is ready");
+    build_eth(frame, NULL, 0, 0x0806);            /* ARP */
+    feed(&fx, frame, 60, 60);
 
-    out = render(f, 10);
-    ASSERT_EQ(0, count_rows(out), "IPv6 header shorter than 40 bytes is rejected");
+    out = render(fx.flows, 10);
+    ASSERT_EQ(0, count_rows(out), "ARP traffic records no flow");
 
     free(out);
-    flows_destroy(f);
+    fixture_close(&fx);
 }
 
 /* ------------------------------------------------------------------ */
-/* Non-IP, truncated and malformed frames                              */
-/* ------------------------------------------------------------------ */
-
-/* ARP and other non-IP EtherTypes are ignored without crashing */
-static void test_non_ip_ethertype(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-
-    build_eth(frame, NULL, 0, 0x0806);            /* ARP  */
-    feed(f, frame, 60, 60);
-    build_eth(frame, NULL, 0, 0x8847);            /* MPLS */
-    feed(f, frame, 60, 60);
-    build_eth(frame, NULL, 0, 0x0000);
-    feed(f, frame, 60, 60);
-
-    out = render(f, 10);
-    ASSERT_EQ(0, count_rows(out), "non-IP EtherTypes record no flow");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* Frames shorter than a full Ethernet header, or cut off mid-IP-header */
-static void test_truncated_frames(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP,
-                            "10.20.0.1", "10.20.0.2", 1234, 80);
-    int i;
-
-    feed(f, frame, 0, 100);                       /* nothing captured      */
-    feed(f, frame, 13, 100);                      /* one byte short of L2  */
-    feed(f, frame, ETH_HDR_LEN, 100);             /* L2 only, no L3        */
-
-    /* Every cut inside the IPv4 header must be rejected */
-    for (i = 1; i < 20; i++) {
-        feed(f, frame, (uint32_t)(ETH_HDR_LEN + i), 100);
-    }
-
-    out = render(f, 10);
-    ASSERT_EQ(0, count_rows(out), "truncated frames record no flow");
-    free(out);
-
-    /* The same frame at full length is still accepted afterwards */
-    feed(f, frame, (uint32_t)caplen, 100);
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "a complete frame is still parsed after truncated ones");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.20.0.1", "1234", "10.20.0.2", "80", 100, 1),
-                "the complete frame's 5-tuple is correct");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/*
- * Both TCP and UDP carry their ports in the first 4 bytes of the header,
- * so a snaplen-truncated capture still resolves them.
- */
-static void test_truncated_l4_still_reads_ports(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-
-    build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP, "10.21.0.1", "10.21.0.2", 1234, 80);
-    /* IPv4 header complete, only 4 of the 20 TCP header bytes captured */
-    feed(f, frame, ETH_HDR_LEN + 20 + 4, 100);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "partial TCP header still records the IP pair");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.21.0.1", "1234", "10.21.0.2", "80", 100, 1),
-                "4 captured TCP bytes are enough for both ports");
-    free(out);
-    flows_destroy(f);
-
-    /* UDP truncated to exactly its 4 port bytes */
-    f = flows_create();
-    build_ipv4(frame, NULL, 0, 5, IPPROTO_UDP, "10.21.1.1", "10.21.1.2", 5353, 53);
-    feed(f, frame, ETH_HDR_LEN + 20 + 4, 100);
-
-    out = render(f, 10);
-    ASSERT_TRUE(has_flow(out, "udp", "10.21.1.1", "5353", "10.21.1.2", "53", 100, 1),
-                "4 captured UDP bytes are enough for both ports");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* One byte short of the port pair: the flow is kept, the ports are not */
-static void test_truncated_l4_below_port_pair(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
-    char *out;
-    int i;
-
-    build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP, "10.23.0.1", "10.23.0.2", 1234, 80);
-
-    /* 0 to 3 captured L4 bytes: no port may be read out of bounds */
-    for (i = 0; i <= 3; i++) {
-        feed(f, frame, (uint32_t)(ETH_HDR_LEN + 20 + i), 100);
-    }
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "L4 headers below 4 bytes still record the IP pair");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.23.0.1", "0", "10.23.0.2", "0", 400, 4),
-                "fewer than 4 captured L4 bytes leave both ports at 0");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/*
- * A VLAN-tagged IPv4 frame fed from an odd address: the IP header, its
- * addresses and the TCP ports are then misaligned for their natural
- * types, which the byte-offset reads must handle (and which UBSan
- * checks when the suite is built with -fsanitize=undefined).
- */
-static void test_misaligned_ipv4_behind_vlan(void) {
-    u_char storage[FRAME_MAX + 1];
-    /* Offset the frame so its first byte sits at an odd address */
-    u_char *frame = storage + (((uintptr_t)storage & 1u) ? 0 : 1);
-    flows_t *f = flows_create();
-    char *out;
-    uint16_t tpids[1] = { 0x8100 };
-    int caplen = build_ipv4(frame, tpids, 1, 5, IPPROTO_TCP,
-                            "10.24.0.1", "10.24.0.2", 1234, 80);
-
-    ASSERT_TRUE(((uintptr_t)(frame + ETH_HDR_LEN + 4) & 3u) != 0,
-                "the VLAN-shifted IPv4 header is not 4-byte aligned");
-
-    feed(f, frame, (uint32_t)caplen, 260);
-
-    out = render(f, 10);
-    ASSERT_EQ(1, count_rows(out), "a misaligned VLAN + IPv4 frame records one flow");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.24.0.1", "1234", "10.24.0.2", "80", 260, 1),
-                "a misaligned IPv4 header is parsed correctly");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* NULL arguments are handled without dereferencing them */
-static void test_null_arguments(void) {
-    u_char frame[FRAME_MAX];
-    struct pcap_pkthdr hdr;
-    flows_t *f = flows_create();
-    char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP,
-                            "10.22.0.1", "10.22.0.2", 1234, 80);
-
-    memset(&hdr, 0, sizeof(hdr));
-    hdr.caplen = (uint32_t)caplen;
-    hdr.len    = 100;
-
-    flows_packet(NULL, &hdr, frame);
-    flows_packet(f, NULL, frame);
-    flows_packet(f, &hdr, NULL);
-    flows_destroy(NULL);
-
-    out = render(f, 10);
-    ASSERT_EQ(0, count_rows(out), "NULL arguments record no flow");
-    free(out);
-
-    /* An empty aggregator prints nothing at all */
-    out = render(f, 10);
-    ASSERT_EQ(0, (int)strlen(out), "an empty aggregator prints nothing");
-
-    free(out);
-    flows_destroy(f);
-}
-
-/* ------------------------------------------------------------------ */
-/* Reporting and capacity                                              */
+/* Reporting                                                           */
 /* ------------------------------------------------------------------ */
 
 /* flows_print_top prints at most top_n rows, largest flow first */
 static void test_print_top_n_and_ordering(void) {
     u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
+    fixture_t fx;
     char *out;
     int caplen;
     int i;
 
-    /* Three flows with increasing volume: port 1002 is the biggest */
+    ASSERT_TRUE(fixture_init(&fx), "fixture is ready");
+
+    /* Three sessions with increasing volume: port 1002 is the biggest */
     for (i = 0; i < 3; i++) {
-        caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP,
+        caplen = build_ipv4(frame, NULL, 0, IPPROTO_TCP,
                             "10.30.0.1", "10.30.0.2", (uint16_t)(1000 + i), 80);
-        feed(f, frame, (uint32_t)caplen, (uint32_t)(100 * (i + 1)));
+        feed(&fx, frame, (uint32_t)caplen, (uint32_t)(100 * (i + 1)));
     }
 
-    out = render(f, 10);
-    ASSERT_EQ(3, count_rows(out), "three distinct source ports make three flows");
+    out = render(fx.flows, 10);
+    ASSERT_EQ(3, count_rows(out), "three source ports make three sessions");
     free(out);
 
-    out = render(f, 2);
+    out = render(fx.flows, 2);
     ASSERT_EQ(2, count_rows(out), "top_n caps the number of printed rows");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.30.0.1", "1002", "10.30.0.2", "80", 300, 1),
+    ASSERT_TRUE(has_flow(out, "10.30.0.1:1002", "10.30.0.2:80", 300, 1),
                 "the largest flow is printed");
-    ASSERT_TRUE(!has_flow(out, "tcp", "10.30.0.1", "1000", "10.30.0.2", "80", 100, 1),
+    ASSERT_TRUE(!has_flow(out, "10.30.0.1:1000", "10.30.0.2:80", 100, 1),
                 "the smallest flow is dropped by top_n");
 
     free(out);
-    flows_destroy(f);
+    fixture_close(&fx);
 }
 
-/* The flow table stops growing at its cap instead of overflowing */
-static void test_flow_table_cap(void) {
-    u_char frame[FRAME_MAX];
-    flows_t *f = flows_create();
+/* Degenerate arguments are handled without dereferencing them */
+static void test_null_arguments(void) {
+    fixture_t fx;
+    flows_t *f;
     char *out;
-    int caplen = build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP,
-                            "10.40.0.1", "10.40.0.2", 1234, 80);
-    int total = EXPECTED_FLOW_CAP + 500;
-    int i;
 
-    /* Walk the destination address to create distinct 5-tuples */
-    for (i = 0; i < total; i++) {
-        frame[ETH_HDR_LEN + 16] = 10;
-        frame[ETH_HDR_LEN + 17] = (u_char)((i >> 16) & 0xFF);
-        frame[ETH_HDR_LEN + 18] = (u_char)((i >> 8) & 0xFF);
-        frame[ETH_HDR_LEN + 19] = (u_char)(i & 0xFF);
-        feed(f, frame, (uint32_t)caplen, 100);
-    }
+    ASSERT_TRUE(fixture_init(&fx), "fixture is ready");
 
-    out = render(f, total + 100);
-    ASSERT_EQ(EXPECTED_FLOW_CAP, count_rows(out),
-              "the flow table stops at its cap instead of overflowing");
+    /* An aggregator that saw nothing prints nothing at all */
+    out = render(fx.flows, 10);
+    ASSERT_EQ(0, (int)strlen(out), "an empty aggregator prints nothing");
     free(out);
 
-    /* Flows already in the table keep aggregating once the cap is hit */
-    frame[ETH_HDR_LEN + 16] = 10;
-    frame[ETH_HDR_LEN + 17] = 0;
-    frame[ETH_HDR_LEN + 18] = 0;
-    frame[ETH_HDR_LEN + 19] = 0;
-    feed(f, frame, (uint32_t)caplen, 100);
-
-    out = render(f, 5);
-    ASSERT_TRUE(has_flow(out, "tcp", "10.40.0.1", "1234", "10.0.0.0", "80", 200, 2),
-                "an existing flow still aggregates after the cap is reached");
-
+    out = render(fx.flows, 0);
+    ASSERT_EQ(0, (int)strlen(out), "top_n of zero prints nothing");
     free(out);
+
+    fixture_close(&fx);
+
+    f = flows_create();
+    ASSERT_TRUE(f != NULL, "flows_create returns a handle");
+    ASSERT_EQ(0, flows_attach(f, NULL), "attaching to a NULL handler fails");
+    ASSERT_EQ(0, flows_attach(NULL, NULL), "attaching a NULL aggregator fails");
+    flows_print_top(NULL, stdout, 10);
     flows_destroy(f);
+    flows_destroy(NULL);
+    tests_run++; tests_pass++;   /* reached here without crashing */
 }
 
 /* ---- Main ---- */
 
 int main(void) {
-    printf("=== Flow aggregation Unit Tests ===\n\n");
+    printf("=== Flow reporting Unit Tests ===\n\n");
+
+    init_extraction();
 
     test_ipv4_tcp_basic();
     test_bytes_use_wire_length();
-    test_same_tuple_aggregates();
-    test_reverse_tuple_is_separate();
+    test_both_directions_are_one_flow();
+    test_same_session_aggregates();
     test_ipv4_udp();
-    test_ipv4_icmp_has_no_ports();
-    test_single_vlan();
-    test_qinq_88a8_8100();
-    test_stacked_8100_8100();
-    test_triple_vlan_9100();
-    test_vlan_truncated_tag();
-    test_ipv4_options_ihl8();
-    test_ipv4_options_ihl15();
-    test_ipv4_ihl_too_small();
-    test_ipv4_ihl_past_caplen();
+    test_distinct_sessions();
+    test_vlan_tagged();
     test_ipv6_tcp();
-    test_ipv6_udp();
-    test_ipv6_hopopts_chain();
-    test_ipv6_multi_ext_chain();
-    test_ipv6_fragment_reserved_byte();
-    test_ipv6_fragment_nonzero_reserved();
-    test_ipv6_fragment_then_hopopts();
-    test_ipv6_auth_header();
-    test_ipv6_esp_stops_walk();
-    test_ipv6_ext_past_caplen();
-    test_ipv6_truncated_header();
-    test_non_ip_ethertype();
-    test_truncated_frames();
-    test_truncated_l4_still_reads_ports();
-    test_truncated_l4_below_port_pair();
-    test_misaligned_ipv4_behind_vlan();
-    test_null_arguments();
+    test_non_ip_traffic();
     test_print_top_n_and_ordering();
-    test_flow_table_cap();
+    test_null_arguments();
+
+    close_extraction();
 
     printf("\n=== Results ===\n");
     printf("Run:  %d\n", tests_run);

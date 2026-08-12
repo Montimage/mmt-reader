@@ -43,13 +43,19 @@ typedef struct proto_info {
 } proto_info_t;
 
 /**
+ * Longest protocol path MMT-DPI can report: PROTO_PATH_SIZE layers of at
+ * most MAX_PROTO_NAME_SIZE characters, each followed by a separator.
+ */
+#define PROTO_PATH_STR_MAX (PROTO_PATH_SIZE * (MAX_PROTO_NAME_SIZE + 1))
+
+/**
  * Protocol path entry for JSON output.
  */
 typedef struct proto_path_entry {
     uint64_t pkts;
     uint64_t volume;
     uint64_t payload;
-    char path[128];
+    char path[PROTO_PATH_STR_MAX];
     struct proto_path_entry *next;
 } proto_path_entry_t;
 
@@ -125,22 +131,32 @@ static void proto_info_insert(proto_info_t **head, proto_info_t *p_info) {
 /* Protocol path helpers                                               */
 /* ------------------------------------------------------------------ */
 
-static int proto_hierarchy_ids_to_str(const proto_hierarchy_t *proto_hierarchy,
-                                       char *dest) {
-    int offset = 0;
+/**
+ * Render a protocol path as "ethernet.ip.tcp.http".
+ *
+ * The path itself comes from MMT-DPI's proto_hierarchy_to_str(), which
+ * prefixes it with the "meta" path root; that first element is dropped
+ * here so the table shows only protocols seen on the wire.
+ *
+ * @param proto_hierarchy  Path returned by get_protocol_stats_path()
+ * @param dest             Destination buffer
+ * @param dest_size        Capacity of dest in bytes
+ */
+static void proto_path_to_str(const proto_hierarchy_t *proto_hierarchy,
+                              char *dest, size_t dest_size) {
+    /* The DPI writes the path without bounds, so the scratch buffer must
+     * fit the longest path it can produce */
+    char full[PROTO_PATH_STR_MAX];
+
     if (proto_hierarchy->len < 1) {
-        offset += sprintf(dest, ".");
-    } else {
-        int index = 1;
-        offset += sprintf(dest, "%s",
-                          get_protocol_name_by_id(proto_hierarchy->proto_path[index]));
-        index++;
-        for (; index < proto_hierarchy->len && index < 16; index++) {
-            offset += sprintf(&dest[offset], ".%s",
-                              get_protocol_name_by_id(proto_hierarchy->proto_path[index]));
-        }
+        snprintf(dest, dest_size, ".");
+        return;
     }
-    return offset;
+
+    proto_hierarchy_to_str(proto_hierarchy, full);
+
+    const char *after_meta = strchr(full, '.');
+    snprintf(dest, dest_size, "%s", (after_meta != NULL) ? after_meta + 1 : full);
 }
 
 static void proto_path_insert(proto_path_entry_t **head, proto_path_entry_t *entry) {
@@ -186,8 +202,8 @@ static void protocols_stats_iterator(uint32_t proto_id, void *args) {
                     proto_hierarchy_t proto_hierarchy = {0};
                     get_protocol_stats_path((mmt_handler_t *)ctx->mmt, proto_stats,
                                             &proto_hierarchy);
-                    char path[128];
-                    proto_hierarchy_ids_to_str(&proto_hierarchy, path);
+                    char path[PROTO_PATH_STR_MAX];
+                    proto_path_to_str(&proto_hierarchy, path, sizeof(path));
 
                     if (ctx->is_json) {
                         /* Collect for JSON output */
@@ -223,11 +239,13 @@ static void protocols_stats_iterator(uint32_t proto_id, void *args) {
 /* ------------------------------------------------------------------ */
 
 static double calc_duration(const engine_stats_t *stats) {
-    double duration = 0;
-    if (stats->end_time.tv_sec > stats->init_time.tv_sec) {
-        duration = (double)(stats->end_time.tv_sec - stats->init_time.tv_sec);
-    } else {
-        duration = 1.0; /* avoid division by zero */
+    double duration =
+        (double)(stats->end_time.tv_sec - stats->init_time.tv_sec) +
+        (double)(stats->end_time.tv_usec - stats->init_time.tv_usec) / 1e6;
+
+    /* A single packet, or none at all, leaves no interval to divide by */
+    if (duration <= 0) {
+        duration = 1.0;
     }
     return duration;
 }
@@ -248,9 +266,9 @@ static void output_text_stats(FILE *fp,
 
     if (proto_path) {
         fprintf(fp, "Protocol statistics with the protocol path:\n\n");
+        /* Column headers — bold */
+        colors_fprintf(fp, COLOR_BOLD, "\t#pkts\t#volume\t#payload\t#proto_path\n");
     }
-    /* Column headers — bold */
-    colors_fprintf(fp, COLOR_BOLD, "\t#pkts\t#volume\t#payload\t#proto_path\n");
     {
         proto_iter_ctx_t ctx = { mmt, proto_path, show_sessions, 0, &agg_head, NULL, fp };
         iterate_through_protocols(protocols_stats_iterator, &ctx);
@@ -297,6 +315,8 @@ static void output_text_stats(FILE *fp,
         fprintf(fp, "%lu\n", stats->nb_ipv4_sessions);
         colors_fprintf(fp, COLOR_BOLD, "\tIPv6 Sessions: ");
         fprintf(fp, "%lu\n", stats->nb_ipv6_sessions);
+        colors_fprintf(fp, COLOR_BOLD, "\tActive Sessions: ");
+        fprintf(fp, "%lu\n", stats->nb_active_sessions);
     }
 
     colors_fprintf(fp, COLOR_BOLD, "\tTotal Sessions: ");
@@ -331,6 +351,14 @@ static void output_json_stats(FILE *fp,
     /* Calculate duration */
     double duration = calc_duration(stats);
 
+    /* Collect the DPI statistics up front: the aggregated protocol list is
+     * emitted whether or not per-path detail was requested. */
+    {
+        proto_iter_ctx_t ctx = { mmt, proto_path, show_sessions, 1,
+                                 &agg_head, &path_head, fp };
+        iterate_through_protocols(protocols_stats_iterator, &ctx);
+    }
+
     /* Open JSON object */
     fprintf(fp, "{\n");
     fprintf(fp, "  \"version\": \"%s\",\n", version());
@@ -345,6 +373,7 @@ static void output_json_stats(FILE *fp,
     if (show_sessions) {
         fprintf(fp, "    \"ipv4_sessions\": %lu,\n", stats->nb_ipv4_sessions);
         fprintf(fp, "    \"ipv6_sessions\": %lu,\n", stats->nb_ipv6_sessions);
+        fprintf(fp, "    \"active_sessions\": %lu,\n", stats->nb_active_sessions);
     }
     fprintf(fp, "    \"total_sessions\": %lu,\n",
             stats->nb_ipv4_sessions + stats->nb_ipv6_sessions);
@@ -354,15 +383,11 @@ static void output_json_stats(FILE *fp,
     /* Protocol paths section (if enabled) */
     if (proto_path) {
         fprintf(fp, "  \"protocol_paths\": [\n");
-        {
-            proto_iter_ctx_t ctx = { mmt, proto_path, show_sessions, 1,
-                                     &agg_head, &path_head, fp };
-            iterate_through_protocols(protocols_stats_iterator, &ctx);
-        }
         /* Output collected paths as JSON array */
         proto_path_entry_t *entry = path_head;
         while (entry != NULL) {
-            char escaped[128];
+            /* Two bytes per input char in the worst case, plus a terminator */
+            char escaped[PROTO_PATH_STR_MAX * 2 + 1];
             json_escape(entry->path, escaped, sizeof(escaped));
             fprintf(fp, "    {\n");
             fprintf(fp, "      \"packets\": %lu,\n", entry->pkts);

@@ -117,9 +117,10 @@ Show per-protocol-path statistics (e.g., TCP.HTTP.Google).
 Show per-protocol session counts.
 .TP
 .B \-F, \-\-flows <seconds>
-Capture for the given number of seconds, then print the top flows by
-transferred volume. Useful to identify which hosts and ports consume the
-most bandwidth. Requires root/cap_net_raw on the interface. This option is
+Capture for the given number of seconds, then print the sessions MMT-DPI
+tracked, ranked by transferred volume: application protocol, client and
+server endpoints, bytes and packets. Useful to identify which hosts and
+applications consume the most bandwidth. Requires root/cap_net_raw on the interface. This option is
 supported by
 .B capture
 only; the

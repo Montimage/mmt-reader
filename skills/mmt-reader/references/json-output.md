@@ -7,14 +7,15 @@ Full shape returned by `--json`. Read this when you need a field the table in SK
   "version": "1.8.0 (42cac8b7)",
   "input_stats": {
     "packets": 14261,
-    "data_volume": 0,
-    "duration_seconds": 298.0,
-    "bandwidth_bytes_per_sec": 0.0,
-    "packets_per_sec": 47.86,
-    "ipv4_sessions": 168,
+    "data_volume": 9216531,
+    "duration_seconds": 298.51,
+    "bandwidth_bytes_per_sec": 30875.60,
+    "packets_per_sec": 47.77,
+    "ipv4_sessions": 679,
     "ipv6_sessions": 0,
-    "total_sessions": 168,
-    "protocols": 0
+    "active_sessions": 168,
+    "total_sessions": 679,
+    "protocols": 28
   },
   "protocol_paths": [
     {
@@ -42,7 +43,7 @@ Full shape returned by `--json`. Read this when you need a field the table in SK
 | Section | Notes |
 |---------|-------|
 | `version` | mmtReader version and build hash. Quote it when reporting a version-dependent quirk. |
-| `input_stats` | Whole-capture summary. `data_volume` is bytes on the wire; `duration_seconds` is wall-clock span of the capture, not analysis time. |
+| `input_stats` | Whole-capture summary, taken from MMT-DPI's own accounting. `data_volume` is bytes on the wire; `duration_seconds` is wall-clock span of the capture, not analysis time. |
 | `protocol_paths` | One entry per distinct DPI path, emitted only with `-a`. `path` is dot-separated bottom-up (`ethernet.ip.tcp.http`). |
 | `protocols` | Aggregated per top-level protocol, sorted by `packets` descending. `data_volume` includes headers; `payload_volume` excludes them. |
 | `anomalies` | Detected anomalies. Empty in most healthy captures — an empty array is not an error. |
@@ -51,9 +52,9 @@ Full shape returned by `--json`. Read this when you need a field the table in SK
 
 Verified against mmtReader 1.8.0 (42cac8b7) on `smallFlows.pcap`.
 
-- **`input_stats.data_volume`, `.bandwidth_bytes_per_sec`, and `.protocols` are always `0`.** Never quote them. Derive: bytes from the `protocols[]` entry named `ethernet` (its `data_volume` is the whole-capture total), bandwidth from that ÷ `duration_seconds`, protocol count from `len(protocols[])`.
-- **`-a` is mandatory.** Without it `protocols[]` is empty and `protocol_paths` is absent from the document entirely. `-s` currently changes nothing — `protocols[].sessions` is `0` either way.
-- `input_stats.packets`, `.duration_seconds`, `.packets_per_sec`, and the three session counts are reliable.
+- **The session fields say different things.** `ipv4_sessions`/`ipv6_sessions`/`total_sessions` count every session seen over the whole capture; `active_sessions` counts only those that had not timed out when the run ended, so it is always the smaller number. The `ipv4_*`, `ipv6_*` and `active_*` fields appear only with `-s`.
+- **`-a` adds `protocol_paths`, nothing else.** Without it the document has no `protocol_paths` key at all; `protocols[]` is populated either way.
+- **`protocols[].sessions` is only non-zero for `ip`/`ipv6`.** MMT-DPI counts a session against the protocol that owns it, which is the IP layer — a `sessions` of `0` on `http` does not mean there were no HTTP sessions.
 - `data_volume` minus `payload_volume` is protocol overhead — useful for "how much is header vs data" questions.
-- Percentages are never precomputed. Derive them from `packets` against `input_stats.packets`, or from `data_volume` against the `ethernet` entry.
+- Percentages are never precomputed. Derive them from `packets` or `data_volume` against the matching `input_stats` field.
 - Layer entries (`ethernet`, `ip`, `tcp`, `udp`) are nested totals, not peers of application protocols. When listing "top protocols" for a user, skip them and report application-level names (`http`, `msn`, `ssl`, …).
