@@ -48,41 +48,46 @@ Install MMT-DPI following the upstream instructions before compiling MMT-Reader.
 
 ## Build
 
-### Compile Command
+### Using Makefile (recommended)
 
 ```bash
-gcc -g -o mmtReader mmtReader.c \
-    -I /opt/mmt/dpi/include \
-    -L /opt/mmt/dpi/lib \
-    -lmmt_core -ldl -lpcap
+make build          # compile
+sudo make install   # install to /usr/local
+sudo make uninstall # remove
+make clean          # remove binary
 ```
 
-**Flag explanation:**
+The Makefile compiles all source files with optimization (`-g -O2`):
 
-| Flag | Meaning |
-|------|---------|
-| `-g` | Include debug symbols (useful with `gdb`) |
-| `-o mmtReader` | Output binary name |
-| `-I /opt/mmt/dpi/include` | MMT-DPI header path |
-| `-L /opt/mmt/dpi/lib` | MMT-DPI library path |
-| `-lmmt_core` | Link against libmmt_core |
-| `-ldl` | Dynamic loading (required by MMT-DPI) |
-| `-lpcap` | Packet capture library |
+```makefile
+SRCS = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c config.c
+CC = gcc
+CFLAGS = -g -O2
+```
+
+### Manual Compile
+
+```bash
+gcc -g -O2 -o mmtReader mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c config.c \
+    -I. -I/opt/mmt/dpi/include -I./utils -I./cli \
+    -L/opt/mmt/dpi/lib \
+    -lmmt_core -ldl -lpcap
+```
 
 ### Build Verification
 
 ```bash
 # Compile
-gcc -g -o mmtReader mmtReader.c -I /opt/mmt/dpi/include -L /opt/mmt/dpi/lib -lmmt_core -ldl -lpcap
+make build
 
 # Verify the binary
 file mmtReader
 
-# Run with the bundled test pcap (if available)
-./mmtReader -t smallFlows.pcap -a
+# Run with the bundled test pcap
+./mmtReader analyze -t smallFlows.pcap -a
 
 # Check help
-./mmtReader -h
+./mmtReader analyze --help
 ```
 
 Expected output: A banner showing MMT-SDK version, build date/time, and a stats table after processing.
@@ -91,42 +96,47 @@ Expected output: A banner showing MMT-SDK version, build date/time, and a stats 
 
 ## Code Structure
 
-MMT-Reader is a single-file C application (`mmtReader.c`, ~530 lines). The execution flow:
+MMT-Reader is a modular C application with clean separation of concerns:
 
 ```
-main()
-  ├── parseOptions()          — Parse CLI arguments (-t, -i, -b, -a, -x, -y, -z, -h)
-  ├── init_extraction()       — Initialize MMT-DPI extraction framework
-  ├── mmt_init_handler()      — Create MMT handler with DLT_EN10MB
-  ├── enable/disable_*_classify()  — Configure classification modes
-  ├── iterate_through_protocols() — Register all protocol attributes for extraction
-  ├── register_packet_handler()   — Register packet callback
-  ├── register_attribute_handler() — Register session callbacks (IPv4/IPv6)
-  ├── sigfillset() + signal()   — Install SIGINT handler for clean shutdown
-  ├── if (TRACE_FILE):
-  │     └── pcap_open_offline() + pcap_next() loop  — Offline mode
-  ├── else if (LIVE_INTERFACE):
-  │     └── init_pcap() + pcap_loop() + live_capture_callback()  — Online mode
-  └── clean()
-        ├── mmt_reader_stats()    — Print statistics
-        ├── mmt_close_handler()   — Close MMT handler
-        ├── close_extraction()    — Close extraction framework
-        ├── pcap_stats()          — Print kernel drop stats
-        └── pcap_close()          — Close pcap handle
+mmtReader.c          — Thin CLI entry point: banner → parse → engine → dispatch → cleanup
+core/engine.c/h      — MMT-DPI engine: packet processing, stats aggregation, session tracking
+cli/parse.c/h        — Argument parsing (getopt_long), subcommand dispatch, validation
+cli/output.c/h       — Text/JSON output rendering
+capture.c/h          — Live pcap capture: handle creation, promiscuous mode, callback
+capture.c            — Live pcap capture: handle creation, promiscuous mode, callback
+config.c/h           — INI config file parsing (~/.mmtreader.conf)
+utils/version.c/h    — Version banner and --version output
+utils/colors.c/h     — ANSI color support (respects NO_COLOR env var)
 ```
 
-### Key Global Variables
+### Execution Flow
 
-| Variable | Type | Purpose |
-|----------|------|---------|
-| `mmt_handler` | `mmt_handler_t*` | MMT-DPI handler instance |
-| `pcap` | `pcap_t*` | libpcap handle |
-| `nb_packets` | `uint64_t` | Total packet count |
-| `nb_ipv4_sessions` / `nb_ipv6_sessions` | `uint64_t` | Session counters |
-| `nb_protocols` | `uint64_t` | Distinct protocol count |
-| `data_volume` | `uint64_t` | Total bytes processed |
-| `proto_path_detail` | `int` | Toggle protocol path display (`-a`) |
-| `ip_address_classify` / `hostname_classify` / `port_classify` | `int` | Classification toggles (`-x`, `-y`, `-z`) |
+```
+main() (mmtReader.c)
+  ├── colors_init()             — Initialize color support
+  ├── parse_options()           — Parse CLI args (subcommand dispatch)
+  ├── version_banner()          — Print banner (stderr for JSON mode)
+  ├── engine_create()           — Create MMT-DPI engine (core/engine.c)
+  ├── engine_set_*_classify()   — Configure classification modes
+  ├── engine_set_output_format() — Set TEXT or JSON output
+  ├── signal(SIGINT)            — Install signal handler
+  ├── if (analyze):
+  │     └── pcap_open_offline() + engine_process_packet() loop
+  ├── else if (capture):
+  │     └── capture_init() + pcap_loop(engine_live_callback)
+  └── engine_destroy()          — Cleanup all resources
+```
+
+### Key Types
+
+| Type | Module | Purpose |
+|------|--------|---------|
+| `engine_t` | core/engine.h | Opaque MMT-DPI engine handle |
+| `engine_stats_t` | core/engine.h | Statistics snapshot (packets, sessions, volume, duration) |
+| `cli_options_t` | cli/parse.h | Parsed CLI options (input, mode, flags, format) |
+| `config_t` | config.h | Parsed INI config file values |
+| `output_format_t` | core/engine.h | TEXT or JSON output format enum |
 
 ---
 
@@ -176,11 +186,13 @@ if (value != NULL) {
 
 ## Coding Conventions
 
-- **Single file:** All code lives in `mmtReader.c`. No header files are used.
-- **Naming:** `snake_case` for functions and variables, `UPPER_SNAKE_CASE` for macros.
-- **Error handling:** `fprintf(stderr, ...)` followed by `exit()` for fatal errors; return codes for recoverable errors.
-- **Memory:** `malloc`/`free` used in the protocol statistics linked list (`proto_info_t`). No memory leak handling beyond cleanup in `clean()`.
+- **Modular architecture:** Code is split across modules (`core/`, `cli/`, `capture/`, `config/`, `utils/`) with clear API boundaries via headers.
+- **Naming:** `snake_case` for functions and variables, `UPPER_SNAKE_CASE` for macros, `camelCase` for struct members.
+- **Error handling:** `fprintf(stderr, ...)` followed by `return EXIT_FAILURE` for fatal errors; return codes for recoverable errors.
+- **Memory:** `malloc`/`free` used in the protocol statistics linked list (`proto_info_t`). Cleanup in `engine_destroy()`.
 - **Signals:** `SIGINT` is caught to ensure clean statistics output and resource cleanup before exit.
+- **Output separation:** `cli/output.c/h` handles all output rendering, keeping `core/engine.c` focused on DPI logic.
+- **Color support:** `utils/colors.c/h` provides ANSI color helpers that respect `NO_COLOR` env var and `--no-color` flag.
 
 ---
 
@@ -204,16 +216,41 @@ Set environment variables or compile flags as documented in the MMT-DPI reposito
 
 ## Testing
 
-The simplest test is to run against a known pcap file:
+### Unit Tests
 
 ```bash
-./mmtReader -t smallFlows.pcap -a
+make test
+```
+
+Runs 7 test targets:
+1. Text output — `analyze -t smallFlows.pcap -a` produces expected output
+2. JSON output — `--json` produces valid JSON parseable by `jq`
+3. Sessions flag — `--sessions` includes IPv4 session counts
+4. JSON sessions — `--json --sessions` includes per-protocol session counts
+5. Config unit tests — `tests/test_config.c` validates config parsing
+6. Parse unit tests — `tests/test_parse.c` validates CLI argument parsing
+7. Completions exist — verifies bash, zsh, and fish completion files
+
+### Manual Testing
+
+```bash
+# Analyze a pcap file
+./mmtReader analyze -t smallFlows.pcap -a
+
+# JSON output
+./mmtReader analyze -t smallFlows.pcap --json -s
+
+# Verbose mode
+./mmtReader analyze -t smallFlows.pcap -v
+
+# Live capture (requires root)
+sudo ./mmtReader capture eth0 -a
 ```
 
 For live testing, use a loopback or dedicated test interface:
 
 ```bash
-sudo ./mmtReader -i lo -a
+sudo ./mmtReader capture lo -a
 ```
 
 ---
@@ -222,13 +259,38 @@ sudo ./mmtReader -i lo -a
 
 ```
 mmtReader/
-├── mmtReader.c        # Single source file (~530 lines)
+├── mmtReader.c        # Thin CLI entry point (~150 lines)
+├── Makefile           # Build, install, test targets
+├── install.sh         # Self-contained global installer
 ├── LICENSE            # Apache 2.0
 ├── README.md          # Quick start
+├── mmtReader.1        # Man page
+├── core/
+│   ├── engine.c       # MMT-DPI engine: packet processing, stats
+│   └── engine.h       # Engine API
+├── cli/
+│   ├── parse.c/h      # Argument parsing, subcommand dispatch
+│   └── output.c/h     # Text/JSON output rendering
+├── capture.c/h        # Live pcap capture operations
+├── config.c/h         # INI config file support
+├── utils/
+│   ├── version.c/h    # Version banner and display
+│   └── colors.c/h     # ANSI color support
+├── tests/
+│   ├── test_config.c  # Config file parsing tests
+│   ├── test_anomaly.c # Anomaly detection tests
+│   ├── test_parse.c   # CLI parsing tests
+│   └── test_cli.sh    # Integration tests
+├── completions/       # Shell completion scripts
+│   ├── mmtReader.bash
+│   ├── mmtReader.zsh
+│   └── mmtReader.fish
 ├── docs/
-│   ├── USER_GUIDE.md  # This file's companion — user-facing docs
+│   ├── USER_GUIDE.md  # User-facing CLI reference
 │   ├── DEVELOPMENT.md # You are here
 │   ├── ARCHITECTURE.md
+│   ├── CONFIG.md      # Config file reference
+│   ├── TESTING.md     # Test suite guide
 │   └── CHANGELOG.md
-└── smallFlows.pcap    # Test pcap (if bundled)
+└── smallFlows.pcap    # Test pcap
 ```

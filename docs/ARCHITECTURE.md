@@ -57,15 +57,15 @@ while ((data = pcap_next(pcap, &p_pkthdr))) {
 ### Online Mode (live interface)
 
 ```c
-pcap = init_pcap(filename, pcap_bs, 65535);
-pcap_loop(pcap, -1, &live_capture_callback, (u_char*)mmt_handler);
+pcap = capture_init(iface, buffer_mb, 65535);
+pcap_loop(pcap, -1, engine_live_callback, (u_char*)eng);
 ```
 
-- Creates a pcap handle with `pcap_create()`
+- Creates a pcap handle via `capture_init()` (`capture.c`)
 - Sets promiscuous mode (`pcap_set_promisc(my_pcap, 1)`)
 - Sets buffer size (default 50 MB, configurable via `-b`)
 - Captures with snaplen 65535
-- Registers `live_capture_callback` for `pcap_loop()`
+- Registers `engine_live_callback` for `pcap_loop()`
 
 **Characteristics:** Real-time, requires root/admin privileges, Ethernet-only (DLT_EN10MB check).
 
@@ -109,19 +109,19 @@ Iterates all known protocols and registers their attributes for extraction via `
 ### Packet Processing
 
 ```c
-packet_process(mmt_handler, &header, data);
+engine_process_packet(eng, &header, data);
 ```
 
-The core DPI call. MMT-DPI analyzes the packet, classifies protocols, extracts attributes, and triggers registered callbacks.
+The core DPI call. `engine_process_packet()` (`core/engine.c`) delegates to MMT-DPI which analyzes the packet, classifies protocols, extracts attributes, and triggers registered callbacks.
 
 ### Callbacks
 
-| Callback | Trigger | Purpose |
-|----------|---------|---------|
-| `packet_handler` | Every processed packet | Updates global counters (packets, data volume, timestamps) |
-| `new_ipv4_session_handler` | New IPv4 session created | Increments `nb_ipv4_sessions` |
-| `new_ipv6_session_handler` | New IPv6 session created | Increments `nb_ipv6_sessions` |
-| `live_capture_callback` | Every raw packet (online) | Converts raw pcap packet to MMT format and calls `packet_process()` |
+| Callback | Module | Trigger | Purpose |
+|----------|--------|---------|---------|
+| `packet_handler` | core/engine.c | Every processed packet | Updates global counters (packets, data volume, timestamps) |
+| `new_ipv4_session_handler` | core/engine.c | New IPv4 session created | Increments `nb_ipv4_sessions` |
+| `new_ipv6_session_handler` | core/engine.c | New IPv6 session created | Increments `nb_ipv6_sessions` |
+| `engine_live_callback` | core/engine.c | Every raw packet (online) | Converts raw pcap packet to MMT format and calls `engine_process_packet()` |
 
 ---
 
@@ -132,10 +132,10 @@ The statistics layer aggregates and ranks protocol data.
 ### Per-Protocol Statistics
 
 ```c
-iterate_through_protocols(protocols_stats, mmt_handler);
+engine_print_stats_ex(eng, stdout, OUTPUT_FORMAT_TEXT, show_sessions);
 ```
 
-For each protocol:
+For each protocol (inside `cli/output.c`):
 1. Gets `proto_statistics_t` via `get_protocol_stats()`
 2. Accumulates `packets_count`, `data_volume`, `payload_volume`
 3. If `-a` is set, retrieves and formats the protocol path hierarchy
@@ -154,7 +154,7 @@ This produces a ranked output: highest-traffic protocols first.
 
 ### Aggregate Statistics
 
-Computed in `mmt_reader_stats()`:
+Computed in `engine_print_stats_ex()` (`cli/output.c`):
 
 | Metric | Formula |
 |--------|---------|
@@ -171,11 +171,15 @@ The output layer formats and prints the final report.
 
 ### Output Sequence
 
-1. **Banner** — MMT-SDK version, build date, Montimage branding
-2. **Protocol stats (with path)** — If `-a` is set, prints per-path breakdown
-3. **Protocol stats (aggregated)** — Sorted by packet count, prints per-protocol totals
-4. **Input statistics** — Summary: packets, data, sessions, protocols, duration, bandwidth, pps, fps
-5. **PCAP statistics** — Kernel/driver drop counts (online mode only)
+1. **Banner** — MMT-SDK version, build date, Montimage branding (`utils/version.c`)
+2. **Protocol stats (with path)** — If `-a` is set, prints per-path breakdown (`cli/output.c`)
+3. **Protocol stats (aggregated)** — Sorted by packet count, prints per-protocol totals (`cli/output.c`)
+4. **Input statistics** — Summary: packets, data, sessions, protocols, duration, bandwidth, pps, fps (`cli/output.c`)
+5. **PCAP statistics** — Kernel/driver drop counts (online mode only) (`core/engine.c`)
+
+### JSON Output
+
+When `--json` is used, `cli/output.c` renders the same statistics as structured JSON to stdout, while banner and debug messages go to stderr.
 
 ### Signal Handling
 
@@ -200,29 +204,29 @@ The `cleaned` guard prevents double-cleanup.
 [pcap file / network interface]
         │
         ▼
-  pcap_open_offline() / pcap_create()
+  mmtReader.c (entry point)
+  ├── pcap_open_offline() / capture_init()
         │
         ▼
-  packet_process(mmt_handler, header, data)
-        │
-        ├──► MMT-DPI protocol classification
-        ├──► MMT-DPI attribute extraction
-        ├──► packet_handler() — update counters
-        ├──► new_ipv4_session_handler() — count sessions
-        └──► new_ipv6_session_handler() — count sessions
+  core/engine.c
+  ├── engine_process_packet() — MMT-DPI classification + extraction
+  ├── packet_handler() — update counters
+  ├── new_ipv4_session_handler() — count sessions
+  └── new_ipv6_session_handler() — count sessions
         │
         ▼
-  iterate_through_protocols(protocols_stats)
-        │
-        ├──► get_protocol_stats() — per-instance stats
-        ├──► proto_hierarchy_ids_to_str() — path formatting
-        └──► insert_proto_info() — sorted linked list
-        │
-        ▼
-  mmt_reader_stats() — format and print
+  core/engine.c (stats aggregation)
+  ├── get_protocol_stats() — per-instance stats
+  ├── proto_hierarchy_ids_to_str() — path formatting
+  └── insert_proto_info() — sorted linked list
         │
         ▼
-  clean() — cleanup resources
+  cli/output.c
+  ├── output_print_stats_ex() — format and print (TEXT or JSON)
+  └── engine_print_pcap_stats() — drop counts
+        │
+        ▼
+  engine_destroy() — cleanup resources
 ```
 
 ---
