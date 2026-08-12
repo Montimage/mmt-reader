@@ -2,13 +2,15 @@
 
 This reference lists common question patterns and the appropriate mmtReader command for each.
 
+**Before using any answer below:** `input_stats.data_volume`, `.bandwidth_bytes_per_sec`, and `.protocols` always read `0`. Wherever a volume, bandwidth, or protocol count is called for, derive it as described in `json-output.md` — total bytes from the `protocols[]` entry named `ethernet`, bandwidth from that ÷ `duration_seconds`, protocol count from `len(protocols[])`.
+
 ## Protocol Questions
 
 **"What protocols are in this capture?"**
 ```bash
 mmtReader analyze -t <file> --json -a -s
 ```
-Answer: List top protocols by packet count and percentage.
+Answer: List top protocols by packet count and percentage, skipping the `ethernet`/`ip`/`tcp`/`udp` layer entries.
 
 **"Which protocols use the most bandwidth?"**
 ```bash
@@ -22,13 +24,13 @@ Answer: Sort `protocols[]` by `data_volume` descending.
 ```bash
 mmtReader analyze -t <file> --json -a -s
 ```
-Answer: Report `input_stats.packets`, `input_stats.data_volume`, `input_stats.duration_seconds`, `input_stats.bandwidth_bytes_per_sec`.
+Answer: Report `input_stats.packets` and `input_stats.duration_seconds` directly; derive total bytes and bandwidth.
 
 **"What's the average bandwidth?"**
 ```bash
 mmtReader analyze -t <file> --json -a -s
 ```
-Answer: Report `input_stats.bandwidth_bytes_per_sec` in human-readable format (KB/s, MB/s).
+Answer: Derive bandwidth (ethernet `data_volume` / `duration_seconds`) and render as KB/s or MB/s.
 
 ## Session Questions
 

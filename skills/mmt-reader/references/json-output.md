@@ -7,14 +7,14 @@ Full shape returned by `--json`. Read this when you need a field the table in SK
   "version": "1.8.0 (42cac8b7)",
   "input_stats": {
     "packets": 14261,
-    "data_volume": 9216531,
+    "data_volume": 0,
     "duration_seconds": 298.0,
-    "bandwidth_bytes_per_sec": 30926.5,
+    "bandwidth_bytes_per_sec": 0.0,
     "packets_per_sec": 47.86,
     "ipv4_sessions": 168,
     "ipv6_sessions": 0,
     "total_sessions": 168,
-    "protocols": 28
+    "protocols": 0
   },
   "protocol_paths": [
     {
@@ -49,7 +49,11 @@ Full shape returned by `--json`. Read this when you need a field the table in SK
 
 ## Field gotchas
 
-- `protocols[].sessions` is `0` in some builds even with `-s`. Fall back to `input_stats.total_sessions` and say the per-protocol split is unavailable.
-- `protocol_paths` is absent without `-a`, and `protocols[].sessions` is absent without `-s`. **The standard run** passes both.
+Verified against mmtReader 1.8.0 (42cac8b7) on `smallFlows.pcap`.
+
+- **`input_stats.data_volume`, `.bandwidth_bytes_per_sec`, and `.protocols` are always `0`.** Never quote them. Derive: bytes from the `protocols[]` entry named `ethernet` (its `data_volume` is the whole-capture total), bandwidth from that ÷ `duration_seconds`, protocol count from `len(protocols[])`.
+- **`-a` is mandatory.** Without it `protocols[]` is empty and `protocol_paths` is absent from the document entirely. `-s` currently changes nothing — `protocols[].sessions` is `0` either way.
+- `input_stats.packets`, `.duration_seconds`, `.packets_per_sec`, and the three session counts are reliable.
 - `data_volume` minus `payload_volume` is protocol overhead — useful for "how much is header vs data" questions.
-- Percentages are never precomputed. Derive them from `packets` or `data_volume` against `input_stats`.
+- Percentages are never precomputed. Derive them from `packets` against `input_stats.packets`, or from `data_volume` against the `ethernet` entry.
+- Layer entries (`ethernet`, `ip`, `tcp`, `udp`) are nested totals, not peers of application protocols. When listing "top protocols" for a user, skip them and report application-level names (`http`, `msn`, `ssl`, …).

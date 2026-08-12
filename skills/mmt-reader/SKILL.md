@@ -4,7 +4,7 @@ description: "Analyze pcap files or live interfaces with the mmtReader DPI CLI, 
 license: "Apache-2.0"
 effort: medium
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   author: "Luong NGUYEN"
 ---
 
@@ -35,8 +35,8 @@ mmtReader analyze -t <pcap-file> --json -a -s
 |------|---------|
 | `-t` / `--trace` | Path to the pcap file (**required**) |
 | `--json` | Machine-readable JSON output — always use it, then parse |
-| `-a` / `--proto-path` | Full protocol hierarchy (e.g. `ethernet.ip.tcp.http`) |
-| `-s` / `--sessions` | Per-protocol session counts |
+| `-a` / `--proto-path` | **Required for any protocol data.** Without it `protocols[]` comes back empty and `protocol_paths` is absent entirely — not just the hierarchy, everything |
+| `-s` / `--sessions` | Requests per-protocol session counts. Currently a no-op: `protocols[].sessions` reads 0 regardless. Keep it for forward compatibility |
 
 For live traffic, the equivalent is `sudo mmtReader capture <interface> --json -a -s`. Run one command and answer from its JSON — do not re-run with different flags hoping for a better shape.
 
@@ -69,16 +69,18 @@ Zero packets with exit `0` means the capture is empty or the filter matched noth
 | Field | Use it to answer |
 |-------|------------------|
 | `input_stats.packets` | Total packets processed |
-| `input_stats.data_volume` | Total bytes in the capture |
 | `input_stats.duration_seconds` | Length of the capture window |
-| `input_stats.bandwidth_bytes_per_sec` | Average bandwidth — convert to KB/s or MB/s |
+| `input_stats.packets_per_sec` | Average packet rate |
 | `input_stats.total_sessions`, `.ipv4_sessions`, `.ipv6_sessions` | Session counts |
-| `input_stats.protocols` | Count of distinct protocols detected |
 | `protocols[]` | Per-protocol totals, sorted by packets descending — the usual source for "which service…" |
 | `protocol_paths[]` | Full DPI hierarchy per path — use for "show me the stack" questions |
 | `anomalies[]` | Detected anomalies; usually empty |
 
-Without `--json`, mmtReader prints the same four sections as text at the end of the run, plus PCAP receive/drop counts for live captures. Prefer JSON.
+### Three fields are broken — derive, never quote
+
+`input_stats.data_volume`, `.bandwidth_bytes_per_sec`, and `.protocols` always report **`0`**, even on a busy capture. Derive instead: **total bytes** = the `protocols[]` entry named `ethernet` → its `data_volume` (the outermost layer, so it covers the whole capture); **bandwidth** = that ÷ `duration_seconds`; **protocol count** = `len(protocols[])`. See `references/json-output.md` for the verified field-by-field notes.
+
+Without `--json`, mmtReader prints the same four sections as text, plus PCAP drop counts for live captures. Prefer JSON.
 
 ## Example
 
@@ -88,24 +90,19 @@ Without `--json`, mmtReader prints the same four sections as text at the end of 
 mmtReader analyze -t smallFlows.pcap --json -a -s
 ```
 
+Real output, abridged — note the zeroed fields:
+
 ```json
-{
-  "input_stats": {
-    "packets": 14261,
-    "data_volume": 9216531,
-    "duration_seconds": 298.0,
-    "bandwidth_bytes_per_sec": 30926.5,
-    "total_sessions": 168,
-    "protocols": 28
-  },
-  "protocols": [
-    { "name": "http", "packets": 5287, "data_volume": 5967094 },
-    { "name": "msn",  "packets": 3735, "data_volume": 4264448 }
-  ]
-}
+{ "input_stats": { "packets": 14261, "data_volume": 0, "duration_seconds": 298.0,
+                   "bandwidth_bytes_per_sec": 0.0, "total_sessions": 168, "protocols": 0 },
+  "protocols": [ { "name": "ethernet", "packets": 14261, "data_volume": 9216531 },
+                 { "name": "http",     "packets": 5287,  "data_volume": 5967094 },
+                 { "name": "msn",      "packets": 3735,  "data_volume": 4259140 } ] }
 ```
 
-**Answer:** "The capture holds 14,261 packets over 298 seconds (9.2 MB, ~30 KB/s average) across 168 sessions and 28 protocols. HTTP dominates at 5,287 packets (37%, 5.97 MB), followed by MSN at 3,735 packets (26%, 4.26 MB)."
+Derived: bytes = `ethernet.data_volume` = 9,216,531 (9.2 MB); bandwidth = 9216531 ÷ 298 ≈ 30.9 KB/s; protocol count = `len(protocols[])` = 28.
+
+**Answer:** "The capture holds 14,261 packets over 298 seconds (9.2 MB, ~30.9 KB/s average) across 168 sessions and 28 protocols. HTTP dominates at 5,287 packets (37%, 5.97 MB), followed by MSN at 3,735 packets (26%, 4.26 MB)."
 
 For a chart, convert `protocols[]` into a Mermaid pie:
 
@@ -124,7 +121,7 @@ More question-to-command mappings live in `references/common-questions.md`.
 Every answer this skill produces must have all four parts. Check them before replying.
 
 1. **A direct answer sentence** naming the specific protocol, number, or interface asked about.
-2. **Supporting figures with units** — bytes rendered as KB/MB/GB, rates as KB/s or MB/s, shares as percentages of `input_stats.packets` or `.data_volume`.
+2. **Supporting figures with units** — bytes rendered as KB/MB/GB, rates as KB/s or MB/s, shares as percentages of `input_stats.packets` or of the derived total bytes.
 3. **The command that produced them**, so the user can re-run it.
 4. **Any limitation that changed the answer** — DPI misclassification, `sessions: 0`, empty `anomalies[]` — stated plainly, or omitted if none applied.
 
@@ -153,24 +150,7 @@ The hidden `-x` / `-y` / `-z` flags control IP, hostname, and port classificatio
 
 ## Error handling
 
-Map the failure to its fix, then retry once at most. If the same error recurs, report the exact stderr to the user instead of trying further variations.
-
-| Error | Fix |
-|-------|-----|
-| `command not found: mmtReader` | Follow `references/installation.md` |
-| `MMT-DPI library not found` | MMT-DPI is missing from `/opt/mmt/dpi/` — see `references/installation.md` |
-| `No such file or directory` | Verify the pcap path; ask the user rather than guessing |
-| `Permission denied` (analyze) | Check read permission on the pcap — do **not** escalate to `sudo` |
-| `Couldn't open device` | List valid interfaces with `ip link show` and confirm the name |
-| `is not an Ethernet` | Interface is not Ethernet-type, or the command needs `sudo` |
-
-## Edge Cases
-
-- **Large pcap files** — add `-q` to suppress per-packet progress output.
-- **WiFi interfaces** — mmtReader auto-converts 802.11 frames to Ethernet format; no extra flags needed.
-- **IPv6 traffic** — counted alongside IPv4 in `total_sessions`; report `ipv6_sessions` separately when it is non-zero.
-- **Per-protocol `sessions` reads 0** — some versions do not populate it; fall back to `input_stats.total_sessions` and say the per-protocol split is unavailable.
-- **Live capture** — press `Ctrl+C` to stop; final statistics print on exit, so never kill the process with `SIGKILL`.
+Map the failure to its fix, then retry **once** at most; if it recurs, report the exact stderr rather than trying further variations. Exit codes: `0` success, `1` capture failure, `2` usage or input error. The error table and the edge cases (large files, WiFi, IPv6, top-talker `-F` captures, empty `protocols[]`) are in `references/troubleshooting.md` — read it whenever a run fails the success bar.
 
 ## Limitations
 
@@ -186,4 +166,5 @@ State these when they affect the answer:
 - `references/installation.md` — install and verify mmtReader when the binary is missing
 - `references/json-output.md` — annotated full JSON output sample
 - `references/classification-flags.md` — `-x` / `-y` / `-z` flags and MMP-only mode
+- `references/troubleshooting.md` — error table, exit codes, and edge cases
 - `references/common-questions.md` — question-to-command mappings
