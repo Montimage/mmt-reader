@@ -405,6 +405,9 @@ static void output_json_stats(FILE *fp,
     }
     fprintf(fp, "\n  ]\n");
 
+    /* Anomaly detection section (placeholder for future extension) */
+    fprintf(fp, ",\n  \"anomalies\": []\n");
+
     /* Close JSON object */
     fprintf(fp, "}\n");
 }
