@@ -92,7 +92,10 @@ test: build
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_engine_output && rm -f test_engine_output
 	@echo ""
-	@echo "=== Test 11: Completions exist ==="
+	@echo "=== Test 11: CLI integration tests ==="
+	./tests/test_cli.sh ./$(TARGET)
+	@echo ""
+	@echo "=== Test 12: Completions exist ==="
 	@test -f completions/mmtReader.bash && echo "Bash completion OK" || echo "Bash completion missing"
 	@test -f completions/mmtReader.zsh && echo "Zsh completion OK" || echo "Zsh completion missing"
 	@test -f completions/mmtReader.fish && echo "Fish completion OK" || echo "Fish completion missing"

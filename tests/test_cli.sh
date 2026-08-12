@@ -49,6 +49,28 @@ assert_output_not_contains() {
     fi
 }
 
+count_occurrences() {
+    local needle="$1"
+    local haystack="$2"
+    grep -cF "$needle" <<< "$haystack" || true
+}
+
+assert_occurrence_count() {
+    local desc="$1"
+    local needle="$2"
+    local expected="$3"
+    local haystack="$4"
+    local actual
+    actual=$( count_occurrences "$needle" "$haystack" )
+    TOTAL=$((TOTAL + 1))
+    if [ "$actual" -eq "$expected" ]; then
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL [$desc]: expected $expected occurrence(s) of '$needle', got $actual"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 echo "=== MMT-READER CLI Integration Tests ==="
 echo "Binary: $BINARY"
 echo ""
@@ -174,6 +196,106 @@ assert_output_contains "short -q flag works" "MMT-READER STATS" "$out"
 
 out=$( "$BINARY" analyze -t smallFlows.pcap -v 2>&1 )
 assert_output_contains "short -v flag works" "DEBUG: verbose mode enabled" "$out"
+
+# ---- Issue #39: Capture output contract ----
+echo ""
+echo "--- Issue #39: Capture output contract ---"
+
+# On the capture path the summary is printed by mmtReader itself, not by
+# engine_destroy(). Hold it to that: exactly one summary on stdout with or
+# without -q, and a stdout that still parses as one document under --json.
+CAPTURE_IF="lo"
+# flows.c writes the heading as "- - - - - - TOP FLOWS BY VOLUME - - - - - -";
+# the phrase alone identifies it and carries no leading dash.
+FLOWS_HEADING="TOP FLOWS BY VOLUME"
+
+# Live capture needs cap_net_raw or root, and the interface has to exist.
+# Probe once and read the reason rather than the exit code alone: only a
+# failure to open or activate the interface is an environment problem worth
+# skipping for. Any other non-zero exit is a regression on the very path
+# this section guards, so it fails loudly instead of skipping quietly.
+CAP_TMP=$( mktemp -d )
+set +e
+probe_rc=0
+"$BINARY" capture -i "$CAPTURE_IF" -F 1 > /dev/null 2> "$CAP_TMP/probe.err" || probe_rc=$?
+probe_reason=$( grep -m1 -E "Couldn't (open|activate) device" "$CAP_TMP/probe.err" )
+set -e
+
+if [ "$probe_rc" -ne 0 ] && [ -n "$probe_reason" ]; then
+    echo "SKIP: live capture on '$CAPTURE_IF' unavailable — ${probe_reason#"[error] "}"
+    rm -rf "$CAP_TMP"
+elif [ "$probe_rc" -ne 0 ]; then
+    TOTAL=$((TOTAL + 1))
+    FAIL=$((FAIL + 1))
+    echo "FAIL [capture probe]: capture -i $CAPTURE_IF -F 1 exited $probe_rc, and not because the interface could not be opened"
+    echo "  Output: $( head -3 "$CAP_TMP/probe.err" )"
+    rm -rf "$CAP_TMP"
+else
+    # Keep the capture window from being empty — the flow table is omitted
+    # when no session resolved to a tuple. bash's /dev/udp needs no package
+    # installed and no listener (port 9 discards). The packets are spread
+    # over a few seconds rather than fired in one burst: the DPI takes a
+    # moment to come up, and anything sent before the capture is live is
+    # never seen. ping is a best-effort extra where the image ships one.
+    poke_loopback() {
+        (
+            if command -v ping > /dev/null 2>&1; then
+                ping -c 15 -i 0.2 -W 1 127.0.0.1 > /dev/null 2>&1 &
+            fi
+            for (( i = 0; i < 30; i++ )); do
+                echo x > /dev/udp/127.0.0.1/9 2>/dev/null || true
+                sleep 0.1
+            done
+        ) > /dev/null 2>&1 &
+    }
+
+    # Text mode: one summary, on stdout
+    poke_loopback
+    set +e
+    rc=0
+    "$BINARY" capture -i "$CAPTURE_IF" -F 1 -a > "$CAP_TMP/text.out" 2> "$CAP_TMP/text.err" || rc=$?
+    set -e
+    assert_exit_code "capture -F 1 -a returns exit 0" 0 "$rc"
+    assert_occurrence_count "capture prints INPUT STATISTICS exactly once" \
+        "INPUT STATISTICS" 1 "$( cat "$CAP_TMP/text.out" )"
+
+    # -q silences the progress messages, never the final summary
+    poke_loopback
+    set +e
+    rc=0
+    "$BINARY" capture -i "$CAPTURE_IF" -F 1 -a -q > "$CAP_TMP/quiet.out" 2> "$CAP_TMP/quiet.err" || rc=$?
+    set -e
+    assert_exit_code "capture -q returns exit 0" 0 "$rc"
+    assert_occurrence_count "capture -q still prints INPUT STATISTICS exactly once" \
+        "INPUT STATISTICS" 1 "$( cat "$CAP_TMP/quiet.out" )"
+
+    # JSON mode: stdout is one document, the flow table goes to stderr
+    poke_loopback
+    set +e
+    rc=0
+    "$BINARY" capture -i "$CAPTURE_IF" -F 1 -a --json > "$CAP_TMP/json.out" 2> "$CAP_TMP/json.err" || rc=$?
+    jq_rc=0
+    jq -e -s 'length == 1' "$CAP_TMP/json.out" > /dev/null 2>&1 || jq_rc=$?
+    set -e
+    assert_exit_code "capture --json returns exit 0" 0 "$rc"
+    assert_exit_code "capture --json writes exactly one JSON document" 0 "$jq_rc"
+    assert_output_contains "capture --json carries input_stats" \
+        "input_stats" "$( cat "$CAP_TMP/json.out" )"
+    assert_output_not_contains "capture --json keeps the flow table off stdout" \
+        "$FLOWS_HEADING" "$( cat "$CAP_TMP/json.out" )"
+    # flows_print_top() prints nothing at all when no session resolved to a
+    # tuple, so a heading absent from both streams means the capture window
+    # was empty — inconclusive, not a regression. Say so rather than
+    # counting a failure. Where the table exists, it belongs on stderr.
+    if grep -qF "$FLOWS_HEADING" "$CAP_TMP/json.out" "$CAP_TMP/json.err"; then
+        assert_output_contains "capture --json writes the flow table to stderr" \
+            "$FLOWS_HEADING" "$( cat "$CAP_TMP/json.err" )"
+    else
+        echo "NOTE: the capture window produced no flows — the --json flow table routing was not exercised"
+    fi
+
+    rm -rf "$CAP_TMP"
+fi
 
 # ---- Summary ----
 echo ""

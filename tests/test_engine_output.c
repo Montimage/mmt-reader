@@ -83,6 +83,12 @@ static int capture_begin(void) {
 
 /**
  * Restore stdout and read back everything written while redirected.
+ *
+ * A capture that does not fit the buffer fails the scenario outright: a
+ * clipped tail could drop a second summary and turn a duplicate into a
+ * PASS, which is the one assertion this file exists to make. stdout is
+ * already restored by then, so the message reaches the real stdout.
+ *
  * @return number of bytes captured
  */
 static size_t capture_end(char *buf, size_t bufsz) {
@@ -99,9 +105,24 @@ static size_t capture_end(char *buf, size_t bufsz) {
     buf[0] = '\0';
     f = fopen(g_cap_path, "rb");
     if (f != NULL) {
+        long size = -1;
+
+        if (fseek(f, 0, SEEK_END) == 0) {
+            size = ftell(f);
+            rewind(f);
+        }
         n = fread(buf, 1, bufsz - 1, f);
         buf[n] = '\0';
         fclose(f);
+
+        if (size < 0) {
+            printf("  FAIL: could not measure the captured stdout\n");
+            scenario_fail++;
+        } else if ((size_t)size > bufsz - 1) {
+            printf("  FAIL: captured stdout truncated (%ld bytes written, buffer holds %lu)\n",
+                   size, (unsigned long)(bufsz - 1));
+            scenario_fail++;
+        }
     }
     unlink(g_cap_path);
     return n;
