@@ -384,22 +384,25 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
 
         case 'c':
             opts->config_path = optarg;
-            /* Reload config with user-specified path */
-            config_t custom_cfg;
-            config_init(&custom_cfg);
-            if (config_load(&custom_cfg, optarg) == 0 && custom_cfg.loaded) {
-                opts->json     = custom_cfg.json;
-                opts->quiet    = custom_cfg.quiet;
-                opts->verbose  = custom_cfg.verbose;
-                opts->no_color = custom_cfg.no_color;
-                opts->buffer_mb = custom_cfg.buffer[CONFIG_SECTION_GLOBAL];
-                if (opts->buffer_mb == 0) opts->buffer_mb = 50;
-            }
             break;
 
         default:
             parse_error(prog_name);
             break;
+        }
+    }
+
+    /* Apply custom config file (highest priority after CLI flags) */
+    if (opts->config_path != NULL) {
+        config_t custom_cfg;
+        config_init(&custom_cfg);
+        if (config_load(&custom_cfg, opts->config_path) == 0 && custom_cfg.loaded) {
+            opts->json     = custom_cfg.json;
+            opts->quiet    = custom_cfg.quiet;
+            opts->verbose  = custom_cfg.verbose;
+            opts->no_color = custom_cfg.no_color;
+            opts->buffer_mb = custom_cfg.buffer[CONFIG_SECTION_GLOBAL];
+            if (opts->buffer_mb == 0) opts->buffer_mb = 50;
         }
     }
 
