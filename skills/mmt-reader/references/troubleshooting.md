@@ -17,6 +17,8 @@ Map the failure to its fix, then retry **once** at most. If the same error recur
 
 Exit codes: `0` success, `1` capture failure, `2` usage or input error.
 
+A run that fails to start — unreadable pcap, unopenable interface — writes **nothing** to stdout. Check the exit code rather than treating an empty stdout as a parse problem. Earlier versions emitted a fully zeroed JSON document on these paths, which read like a successful capture of no traffic.
+
 ## Edge cases
 
 - **Large pcap files** — add `-q` to suppress per-packet progress output.

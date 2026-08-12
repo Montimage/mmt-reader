@@ -38,13 +38,13 @@ mmtReader analyze -t <pcap-file> --json -a -s
 | `-a` / `--proto-path` | Adds the `protocol_paths[]` section — the full DPI hierarchy per path. Without it that key is absent; `protocols[]` is populated either way |
 | `-s` / `--sessions` | Adds the per-IP-version and active session counts to `input_stats`, and `sessions` to each `protocols[]` entry |
 
-For live traffic, **the live run** — `-q` is **not optional**:
+For live traffic, **the live run**:
 
 ```bash
-mmtReader capture <interface> -q -a -s --json
+mmtReader capture <interface> -a -s --json
 ```
 
-Without `-q` a human-readable stats block precedes the JSON and the output will not parse. Live capture needs root, or `cap_net_raw` as granted by `install.sh`. Stop with `Ctrl+C`.
+Under `--json` everything that is not the document — banner, `INFO:` lines, the `-F` flow table — goes to stderr, so stdout is a single JSON document with or without `-q`. Adding `-q` only silences the `INFO:` chatter. Live capture needs root, or `cap_net_raw` as granted by `install.sh`. Stop with `Ctrl+C`.
 
 Run one command and answer from its JSON — do not re-run with different flags hoping for a better shape.
 

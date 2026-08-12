@@ -49,6 +49,12 @@ clean:
 test: build
 	@echo "=== Test 1: Text output ==="
 	./$(TARGET) analyze -t smallFlows.pcap -a 2>&1 | tail -5
+	@# analyze prints its summary explicitly, not from engine_destroy():
+	@# guard both directions — losing the call, or printing it twice again
+	test "$$(./$(TARGET) analyze -t smallFlows.pcap 2>/dev/null | grep -c 'INPUT STATISTICS')" = "1" \
+		&& echo "Summary printed exactly once OK"
+	./$(TARGET) analyze -t smallFlows.pcap --json 2>/dev/null | jq -e 'has("input_stats")' > /dev/null \
+		&& echo "JSON summary present OK"
 	@echo ""
 	@echo "=== Test 2: JSON output ==="
 	./$(TARGET) analyze -t smallFlows.pcap -a --json 2>/dev/null | jq '.input_stats.packets' > /dev/null && echo "JSON valid OK"
