@@ -285,10 +285,6 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
     return PARSE_EXIT_OK;
 }
 
-void parse_help(const char *prog_name) {
-    fprintf(stdout, general_help, prog_name, prog_name);
-}
-
 void parse_error(const char *prog_name) {
     fprintf(stderr, "Use \"%s --help\" for usage information\n", prog_name);
     exit(PARSE_EXIT_ERROR);

@@ -52,15 +52,6 @@ typedef struct {
 /* Protocol info list helpers                                          */
 /* ------------------------------------------------------------------ */
 
-static void proto_info_free_all(proto_info_t *head) {
-    proto_info_t *current = head;
-    while (current != NULL) {
-        proto_info_t *next = current->next;
-        free(current);
-        current = next;
-    }
-}
-
 static void proto_info_insert(proto_info_t **head, proto_info_t *p_info) {
     if (*head == NULL) {
         *head = p_info;

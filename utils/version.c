@@ -7,9 +7,8 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include "version.h"
-#include "core/engine.h"
+#include "mmt_core.h"
 
 /* ------------------------------------------------------------------ */
 /* Internal: banner format                                             */

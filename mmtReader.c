@@ -29,9 +29,18 @@ static volatile sig_atomic_t got_signal = 0;
 /* ------------------------------------------------------------------ */
 
 static void signal_handler(int type) {
-    printf("\nINFO: reception of signal %d\n", type);
+    /* Use async-signal-safe write() — printf is not signal-safe */
+    ssize_t ret;
+    const char msg[] = "\nINFO: reception of signal ";
+    ret = write(STDOUT_FILENO, msg, sizeof(msg) - 1);
+    (void)ret;
+    char buf[16];
+    int len = snprintf(buf, sizeof(buf), "%d\n", type);
+    if (len > 0 && (size_t)len < sizeof(buf)) {
+        ret = write(STDOUT_FILENO, buf, (size_t)len);
+        (void)ret;
+    }
     got_signal = 1;
-    fflush(stderr);
 }
 
 /* ------------------------------------------------------------------ */

@@ -31,64 +31,6 @@ static int proto_path_detail = 1;
 
 
 /* ------------------------------------------------------------------ */
-/* Packet handler (internal)                                           */
-/* ------------------------------------------------------------------ */
-
-static int packet_handler(const ipacket_t *ipacket, void *user_args) {
-    engine_t *eng = (engine_t *)user_args;
-
-    uint64_t *packet_count = (uint64_t *)get_attribute_extracted_data(
-        ipacket, PROTO_META, PROTO_PACKET_COUNT);
-    if (packet_count != NULL) {
-        eng->stats.nb_packets = *packet_count;
-    }
-
-    uint64_t *data_count = (uint64_t *)get_attribute_extracted_data(
-        ipacket, PROTO_META, PROTO_DATA_VOLUME);
-    if (data_count != NULL) {
-        eng->stats.data_volume = *data_count;
-    }
-
-    if (ipacket->packet_id == 1) {
-        struct timeval *first_time = (struct timeval *)get_attribute_extracted_data(
-            ipacket, PROTO_META, PROTO_FIRST_PACKET_TIME);
-        if (first_time != NULL) {
-            eng->stats.init_time = *first_time;
-        }
-    }
-
-    struct timeval *last_time = (struct timeval *)get_attribute_extracted_data(
-        ipacket, PROTO_META, PROTO_LAST_PACKET_TIME);
-    if (last_time != NULL) {
-        eng->stats.end_time = *last_time;
-    }
-
-    return 0;
-}
-
-/* ------------------------------------------------------------------ */
-/* Session handlers (internal)                                         */
-/* ------------------------------------------------------------------ */
-
-static void new_ipv4_session_handler(const ipacket_t *ipacket,
-                                     attribute_t *attribute,
-                                     void *user_args) {
-    (void)ipacket;
-    (void)attribute;
-    engine_t *eng = (engine_t *)user_args;
-    eng->stats.nb_ipv4_sessions++;
-}
-
-static void new_ipv6_session_handler(const ipacket_t *ipacket,
-                                     attribute_t *attribute,
-                                     void *user_args) {
-    (void)ipacket;
-    (void)attribute;
-    engine_t *eng = (engine_t *)user_args;
-    eng->stats.nb_ipv6_sessions++;
-}
-
-/* ------------------------------------------------------------------ */
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -137,7 +79,7 @@ void engine_destroy(engine_t *eng) {
 void engine_set_ip_classify(engine_t *eng, int on) {
     if (eng == NULL) return;
     if (on) {
-        printf("Enable classification by IP address");
+        printf("Enable classification by IP address\n");
         enable_ip_address_classify(eng->mmt);
     } else {
         disable_ip_address_classify(eng->mmt);
@@ -147,7 +89,7 @@ void engine_set_ip_classify(engine_t *eng, int on) {
 void engine_set_hostname_classify(engine_t *eng, int on) {
     if (eng == NULL) return;
     if (on) {
-        printf("Enable classification by Hostname");
+        printf("Enable classification by Hostname\n");
         enable_hostname_classify(eng->mmt);
     } else {
         disable_hostname_classify(eng->mmt);
@@ -157,7 +99,7 @@ void engine_set_hostname_classify(engine_t *eng, int on) {
 void engine_set_port_classify(engine_t *eng, int on) {
     if (eng == NULL) return;
     if (on) {
-        printf("Enable classification by Port number");
+        printf("Enable classification by Port number\n");
         enable_port_classify(eng->mmt);
     } else {
         disable_port_classify(eng->mmt);
@@ -203,16 +145,4 @@ void engine_print_stats(const engine_t *eng) {
     output_print_stats(stdout, eng->mmt, proto_path_detail, &eng->stats);
 }
 
-void engine_print_pcap_stats(const struct pcap_stat *pcs) {
-    if (pcs == NULL) return;
 
-    if (pcs->ps_recv == 0) return;
-
-    printf(">>>> PCAP STATISTICS <<<< \n\n");
-    printf("%12d Received\n", pcs->ps_recv);
-    printf("%12d Dropped by kernel (%3.2f%%)\n",
-           pcs->ps_drop, pcs->ps_drop * 100.0 / pcs->ps_recv);
-    printf("%12d Dropped by driver (%3.2f%%)\n",
-           pcs->ps_ifdrop, pcs->ps_ifdrop * 100.0 / pcs->ps_recv);
-    fflush(stderr);
-}
