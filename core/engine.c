@@ -293,14 +293,11 @@ void engine_print_stats_ex(const engine_t *eng, FILE *fp,
 
 void engine_print_stats(const engine_t *eng) {
     if (eng == NULL) return;
-    engine_print_stats_ex(eng, stdout, OUTPUT_FORMAT_TEXT, 0);
+    engine_print_stats_ex(eng, stdout, eng->output_format, eng->show_sessions);
 }
 
 void engine_destroy(engine_t *eng) {
     if (eng == NULL) return;
-
-    /* Print final stats (delegated to output module) */
-    engine_print_stats_ex(eng, stdout, eng->output_format, eng->show_sessions);
 
     /* Close MMT handler */
     if (eng->mmt) {

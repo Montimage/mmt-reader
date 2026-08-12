@@ -133,8 +133,11 @@ The statistics layer aggregates and ranks protocol data.
 ### Per-Protocol Statistics
 
 ```c
-engine_print_stats_ex(eng, stdout, OUTPUT_FORMAT_TEXT, show_sessions);
+engine_print_stats_ex(eng, stdout, output_format, show_sessions);
 ```
+
+The summary is printed by whichever call site wants it — `engine_destroy()`
+performs no output, so freeing the engine has no effect on stdout.
 
 For each protocol (inside `cli/output.c`):
 1. Gets `proto_statistics_t` via `get_protocol_stats()` — one instance per protocol path
