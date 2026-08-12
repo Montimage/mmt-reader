@@ -14,18 +14,18 @@ An AI Agent receives a natural language question about network traffic, runs mmt
 
 ```mermaid
 flowchart LR
-    A[Human question\n"Which services are slow?"] --> B[AI Agent]
-    B --> C[mmtReader analyze\n-t capture.pcap -a]
-    C --> D[Protocol stats\nPacket counts, bandwidth,\nsessions per protocol]
+    A[Human question<br/>"Which services are slow?"] --> B[AI Agent]
+    B --> C[mmtReader analyze<br/>-t capture.pcap -a]
+    C --> D[Protocol stats<br/>Packet counts, bandwidth,<br/>sessions per protocol]
     D --> E[AI Agent]
-    E --> F[Human answer\nPlain language + diagram]
+    E --> F[Human answer<br/>Plain language + diagram]
 ```
 
 The AI Agent handles the translation: raw protocol statistics become plain language with actionable insights.
 
 ## Agent Workflow
 
-```
+```mermaid
 sequenceDiagram
     participant Human as Human
     participant Agent as AI Agent
