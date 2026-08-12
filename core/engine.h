@@ -134,6 +134,22 @@ int engine_process_packet(engine_t *eng,
                           const u_char *data);
 
 /**
+ * Process a packet via the capture layer's processor interface.
+ *
+ * Thin adapter matching capture_processor_fn: casts ctx back to an
+ * engine handle and forwards to engine_process_packet(), so live
+ * capture keeps the same accounting as every other path.
+ *
+ * @param ctx   Engine handle as an opaque pointer
+ * @param hdr   MMT packet header (timestamp, length)
+ * @param data  Raw packet bytes
+ * @return 1 on success, 0 on failure
+ */
+int engine_process_packet_cb(void *ctx,
+                             const struct pkthdr *hdr,
+                             const u_char *data);
+
+/**
  * Process a packet via the legacy callback interface.
  * Used internally by pcap_loop callbacks.
  *

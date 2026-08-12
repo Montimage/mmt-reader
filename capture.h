@@ -47,6 +47,34 @@ void capture_breakloop(void);
 void capture_set_context(mmt_handler_t *mmt, int datalink);
 
 /**
+ * Packet processor invoked by the capture callback for every frame.
+ *
+ * Lets the capture layer hand each frame to a higher-level owner (the
+ * DPI engine) without depending on it, so packet accounting happens in
+ * exactly one place.
+ *
+ * @param ctx   Opaque context registered with capture_set_processor()
+ * @param hdr   MMT packet header (timestamp, captured/wire length)
+ * @param data  Frame bytes (Ethernet-converted when applicable)
+ * @return      Non-zero on success, 0 on extraction failure
+ */
+typedef int (*capture_processor_fn)(void *ctx,
+                                    const struct pkthdr *hdr,
+                                    const u_char *data);
+
+/**
+ * Set the packet processor used by the capture callback.
+ *
+ * When no processor is set (or it is cleared with NULL), the callback
+ * falls back to calling packet_process() on the handler registered with
+ * capture_set_context().
+ *
+ * @param fn   Processor function, or NULL to restore the fallback
+ * @param ctx  Opaque context passed back to the processor
+ */
+void capture_set_processor(capture_processor_fn fn, void *ctx);
+
+/**
  * Set the flow aggregator fed by the capture callback.
  * May be NULL to disable flow tracking. The aggregator receives the
  * Ethernet-converted frames (WiFi 802.11 frames are converted first).

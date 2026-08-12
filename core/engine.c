@@ -186,6 +186,12 @@ int engine_process_packet(engine_t *eng,
     return result;
 }
 
+int engine_process_packet_cb(void *ctx,
+                             const struct pkthdr *hdr,
+                             const u_char *data) {
+    return engine_process_packet((engine_t *)ctx, hdr, data);
+}
+
 void engine_live_callback(u_char *user,
                           const struct pcap_pkthdr *p_pkthdr,
                           const u_char *data) {

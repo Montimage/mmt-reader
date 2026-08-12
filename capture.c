@@ -34,6 +34,10 @@ static pcap_t         *g_capture_pcap = NULL;
 /** Flow aggregator fed with Ethernet-converted frames (may be NULL) */
 static flows_t        *g_flows = NULL;
 
+/** Packet processor set by capture_set_processor() (may be NULL) */
+static capture_processor_fn g_processor = NULL;
+static void                *g_processor_ctx = NULL;
+
 /* ------------------------------------------------------------------ */
 /* WiFi (802.11) to Ethernet conversion                                */
 /* ------------------------------------------------------------------ */
@@ -232,11 +236,20 @@ void capture_set_flows(flows_t *flows) {
     g_flows = flows;
 }
 
+void capture_set_processor(capture_processor_fn fn, void *ctx) {
+    g_processor = fn;
+    g_processor_ctx = ctx;
+}
+
 /**
- * Feed a frame to the flow aggregator and to MMT as-is.
+ * Feed a frame to the flow aggregator and to the packet processor.
+ *
+ * The processor owns the packet accounting (counters, timestamps); when
+ * none is registered the frame goes straight to MMT as before.
  */
 static void process_frame(const struct pcap_pkthdr *p_pkthdr, const u_char *data) {
     struct pkthdr header;
+    int ok;
 
     header.ts     = p_pkthdr->ts;
     header.caplen = p_pkthdr->caplen;
@@ -245,7 +258,14 @@ static void process_frame(const struct pcap_pkthdr *p_pkthdr, const u_char *data
     if (g_flows != NULL) {
         flows_packet(g_flows, p_pkthdr, data);
     }
-    if (!packet_process(g_mmt, &header, data)) {
+
+    if (g_processor != NULL) {
+        ok = g_processor(g_processor_ctx, &header, data);
+    } else {
+        ok = packet_process(g_mmt, &header, data) ? 1 : 0;
+    }
+
+    if (!ok) {
         fprintf(stderr, "Packet data extraction failure.\n");
     }
 }
