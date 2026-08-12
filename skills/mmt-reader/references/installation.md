@@ -5,7 +5,7 @@ Read this only when `mmtReader --version` fails. mmtReader needs the MMT-DPI lib
 ## 1. Locate an existing build
 
 ```bash
-for dir in /home/montimage/workspace/mmt/mmt-reader ~/workspace/mmt/mmt-reader /opt/mmt/mmt-reader; do
+for dir in . ~/workspace/mmt/mmt-reader /opt/mmt/mmt-reader /usr/local/src/mmt-reader; do
   if [ -f "$dir/mmtReader" ]; then echo "Found source at $dir"; break; fi
 done
 ```
