@@ -152,6 +152,9 @@ int main(int argc, char **argv) {
         }
         pcap_close(pcap);
 
+        /* Print the summary explicitly — engine_destroy() no longer does */
+        engine_print_stats(eng);
+
     } else if (opts.mode == 2) {
         /* ONLINE mode: live capture from interface */
         pcap_t *pcap;
@@ -225,15 +228,22 @@ int main(int argc, char **argv) {
         }
         capture_close(pcap);
 
-        /* Print final statistics before exit */
         if (!opts.quiet) {
             fprintf(stderr, "\nINFO: Capture stopped\n");
-            engine_print_stats(eng);
         }
 
-        /* Print top flows after the protocol stats */
+        /* Print final statistics before exit — exactly once, in the
+         * configured format */
+        engine_print_stats(eng);
+
+        /* Top flows follow the protocol stats. The table has no JSON
+         * form, so under --json it goes to stderr and stdout stays a
+         * single JSON document — the same split the banner uses. */
         if (flows != NULL) {
-            flows_print_top(flows, stdout, 15);
+            flows_print_top(flows,
+                            opts.output_format == OUTPUT_FORMAT_JSON
+                                ? stderr : stdout,
+                            15);
             flows_destroy(flows);
         }
 

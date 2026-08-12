@@ -68,6 +68,11 @@ mmt_handler_t *engine_get_mmt(const engine_t *eng);
 
 /**
  * Destroy the engine and release all internal resources.
+ *
+ * Produces no output. Callers that want a statistics summary ask for one
+ * with engine_print_stats() before destroying, so freeing the engine has
+ * no side effects on stdout.
+ *
  * @param eng Engine handle (NULL is safe)
  */
 void engine_destroy(engine_t *eng);
@@ -185,7 +190,10 @@ void engine_print_stats_ex(const engine_t *eng, FILE *fp,
                            output_format_t format, int show_sessions);
 
 /**
- * Print accumulated statistics to stdout (legacy API).
+ * Print accumulated statistics to stdout in the engine's configured
+ * output format, honouring engine_set_output_format() and
+ * engine_set_show_sessions().
+ *
  * @param eng  Engine handle
  */
 void engine_print_stats(const engine_t *eng);

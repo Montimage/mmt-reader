@@ -49,6 +49,12 @@ clean:
 test: build
 	@echo "=== Test 1: Text output ==="
 	./$(TARGET) analyze -t smallFlows.pcap -a 2>&1 | tail -5
+	@# analyze prints its summary explicitly, not from engine_destroy():
+	@# guard both directions — losing the call, or printing it twice again
+	test "$$(./$(TARGET) analyze -t smallFlows.pcap 2>/dev/null | grep -c 'INPUT STATISTICS')" = "1" \
+		&& echo "Summary printed exactly once OK"
+	./$(TARGET) analyze -t smallFlows.pcap --json 2>/dev/null | jq -e 'has("input_stats")' > /dev/null \
+		&& echo "JSON summary present OK"
 	@echo ""
 	@echo "=== Test 2: JSON output ==="
 	./$(TARGET) analyze -t smallFlows.pcap -a --json 2>/dev/null | jq '.input_stats.packets' > /dev/null && echo "JSON valid OK"
@@ -80,7 +86,16 @@ test: build
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_capture_dispatch && rm -f test_capture_dispatch
 	@echo ""
-	@echo "=== Test 10: Completions exist ==="
+	@echo "=== Test 10: Engine output unit tests ==="
+	gcc -g -o test_engine_output tests/test_engine_output.c core/engine.c cli/output.c \
+		utils/colors.c utils/version.c \
+		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
+		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_engine_output && rm -f test_engine_output
+	@echo ""
+	@echo "=== Test 11: CLI integration tests ==="
+	./tests/test_cli.sh ./$(TARGET)
+	@echo ""
+	@echo "=== Test 12: Completions exist ==="
 	@test -f completions/mmtReader.bash && echo "Bash completion OK" || echo "Bash completion missing"
 	@test -f completions/mmtReader.zsh && echo "Zsh completion OK" || echo "Zsh completion missing"
 	@test -f completions/mmtReader.fish && echo "Fish completion OK" || echo "Fish completion missing"
