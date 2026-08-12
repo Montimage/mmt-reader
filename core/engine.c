@@ -23,6 +23,8 @@
 struct engine {
     mmt_handler_t *mmt;           /**< MMT handler                   */
     engine_stats_t stats;         /**< Accumulated statistics        */
+    output_format_t output_format;/**< Output format (TEXT/JSON)     */
+    int show_sessions;            /**< Show per-protocol sessions    */
 };
 
 /* Module-level proto_path_detail (shared by output_print_stats) */
@@ -61,25 +63,10 @@ engine_t *engine_create(int dlt, int flags, char *errbuf) {
     return eng;
 }
 
-void engine_destroy(engine_t *eng) {
-    if (eng == NULL) return;
-
-    /* Print final stats (delegated to output module) */
-    engine_print_stats(eng);
-
-    /* Close MMT handler */
-    if (eng->mmt) {
-        mmt_close_handler(eng->mmt);
-        close_extraction();
-    }
-
-    free(eng);
-}
-
 void engine_set_ip_classify(engine_t *eng, int on) {
     if (eng == NULL) return;
     if (on) {
-        printf("Enable classification by IP address\n");
+        fprintf(stderr, "Enable classification by IP address\n");
         enable_ip_address_classify(eng->mmt);
     } else {
         disable_ip_address_classify(eng->mmt);
@@ -89,7 +76,7 @@ void engine_set_ip_classify(engine_t *eng, int on) {
 void engine_set_hostname_classify(engine_t *eng, int on) {
     if (eng == NULL) return;
     if (on) {
-        printf("Enable classification by Hostname\n");
+        fprintf(stderr, "Enable classification by Hostname\n");
         enable_hostname_classify(eng->mmt);
     } else {
         disable_hostname_classify(eng->mmt);
@@ -99,7 +86,7 @@ void engine_set_hostname_classify(engine_t *eng, int on) {
 void engine_set_port_classify(engine_t *eng, int on) {
     if (eng == NULL) return;
     if (on) {
-        printf("Enable classification by Port number\n");
+        fprintf(stderr, "Enable classification by Port number\n");
         enable_port_classify(eng->mmt);
     } else {
         disable_port_classify(eng->mmt);
@@ -111,10 +98,28 @@ void engine_set_proto_path_detail(engine_t *eng, int on) {
     proto_path_detail = on;
 }
 
+void engine_set_output_format(engine_t *eng, output_format_t format) {
+    if (eng == NULL) return;
+    eng->output_format = format;
+}
+
+void engine_set_show_sessions(engine_t *eng, int on) {
+    if (eng == NULL) return;
+    eng->show_sessions = on;
+}
+
 int engine_process_packet(engine_t *eng,
                           const struct pkthdr *hdr,
                           const u_char *data) {
     if (eng == NULL || hdr == NULL || data == NULL) return 0;
+
+    /* Track packet count and timestamps */
+    eng->stats.nb_packets++;
+    if (eng->stats.nb_packets == 1) {
+        eng->stats.init_time = hdr->ts;
+    }
+    eng->stats.end_time = hdr->ts;
+
     /* Cast away const — packet_process expects non-const per MMT-DPI API */
     return packet_process(eng->mmt, (struct pkthdr *)hdr, (u_char *)data) ? 1 : 0;
 }
@@ -136,13 +141,45 @@ void engine_live_callback(u_char *user,
 void engine_get_stats(const engine_t *eng, engine_stats_t *out) {
     if (eng == NULL || out == NULL) return;
     *out = eng->stats;
+
+    /* Populate session counts from MMT-DPI */
+    uint64_t total_sessions = get_active_session_count(eng->mmt);
+    /* MMT-DPI does not expose per-IP-version session counts.
+     * Report the total in nb_ipv4_sessions for backward compatibility */
+    out->nb_ipv4_sessions = total_sessions;
+    out->nb_ipv6_sessions = 0;
+}
+
+void engine_print_stats_ex(const engine_t *eng, FILE *fp,
+                           output_format_t format, int show_sessions) {
+    if (eng == NULL) return;
+
+    /* Get fresh stats from MMT-DPI */
+    engine_get_stats(eng, (engine_stats_t *)&eng->stats);
+
+    /* Delegate output formatting to the output module */
+    output_print_stats_ex(fp, eng->mmt, proto_path_detail,
+                          format, show_sessions, &eng->stats);
 }
 
 void engine_print_stats(const engine_t *eng) {
     if (eng == NULL) return;
+    engine_print_stats_ex(eng, stdout, OUTPUT_FORMAT_TEXT, 0);
+}
 
-    /* Delegate output formatting to the output module */
-    output_print_stats(stdout, eng->mmt, proto_path_detail, &eng->stats);
+void engine_destroy(engine_t *eng) {
+    if (eng == NULL) return;
+
+    /* Print final stats (delegated to output module) */
+    engine_print_stats_ex(eng, stdout, eng->output_format, eng->show_sessions);
+
+    /* Close MMT handler */
+    if (eng->mmt) {
+        mmt_close_handler(eng->mmt);
+        close_extraction();
+    }
+
+    free(eng);
 }
 
 

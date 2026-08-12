@@ -18,6 +18,14 @@
 /* ------------------------------------------------------------------ */
 
 /**
+ * Output format for statistics display.
+ */
+typedef enum {
+    OUTPUT_FORMAT_TEXT,   /**< Human-readable text table (default) */
+    OUTPUT_FORMAT_JSON    /**< Machine-readable JSON               */
+} output_format_t;
+
+/**
  * Engine statistics snapshot (read-only after processing).
  */
 typedef struct {
@@ -87,6 +95,20 @@ void engine_set_port_classify(engine_t *eng, int on);
  */
 void engine_set_proto_path_detail(engine_t *eng, int on);
 
+/**
+ * Set the output format for statistics display.
+ * @param eng    Engine handle
+ * @param format OUTPUT_FORMAT_TEXT or OUTPUT_FORMAT_JSON
+ */
+void engine_set_output_format(engine_t *eng, output_format_t format);
+
+/**
+ * Enable per-protocol session count display.
+ * @param eng  Engine handle
+ * @param on   1 = enable, 0 = disable
+ */
+void engine_set_show_sessions(engine_t *eng, int on);
+
 /* ------------------------------------------------------------------ */
 /* Packet processing                                                   */
 /* ------------------------------------------------------------------ */
@@ -127,7 +149,18 @@ void engine_live_callback(u_char *user,
 void engine_get_stats(const engine_t *eng, engine_stats_t *out);
 
 /**
- * Print accumulated statistics to stdout.
+ * Print accumulated statistics to the given file descriptor.
+ *
+ * @param eng        Engine handle
+ * @param fp         File descriptor to write to (stdout, stderr, or NULL for stdout)
+ * @param format     Output format (TEXT or JSON)
+ * @param show_sessions  1 to include per-protocol session breakdown
+ */
+void engine_print_stats_ex(const engine_t *eng, FILE *fp,
+                           output_format_t format, int show_sessions);
+
+/**
+ * Print accumulated statistics to stdout (legacy API).
  * @param eng  Engine handle
  */
 void engine_print_stats(const engine_t *eng);

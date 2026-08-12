@@ -43,4 +43,16 @@ clean:
 	rm -f $(TARGET)
 
 test: build
-	./$(TARGET) analyze -t smallFlows.pcap -a | tail -15
+	@echo "=== Test 1: Text output ==="
+	./$(TARGET) analyze -t smallFlows.pcap -a 2>&1 | tail -5
+	@echo ""
+	@echo "=== Test 2: JSON output ==="
+	./$(TARGET) analyze -t smallFlows.pcap -a --json 2>/dev/null | jq '.input_stats.packets' > /dev/null && echo "JSON valid ✓"
+	@echo ""
+	@echo "=== Test 3: Sessions flag ==="
+	./$(TARGET) analyze -t smallFlows.pcap -a --sessions 2>&1 | grep "IPv4 Sessions" > /dev/null && echo "Sessions flag works ✓"
+	@echo ""
+	@echo "=== Test 4: JSON with sessions ==="
+	./$(TARGET) analyze -t smallFlows.pcap -a --json --sessions 2>/dev/null | jq '.protocols[0].sessions' > /dev/null && echo "JSON sessions valid ✓"
+	@echo ""
+	@echo "All tests passed!"

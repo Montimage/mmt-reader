@@ -34,6 +34,9 @@ static const char *analyze_help =
 "  -i, --interface <iface>  Live network interface (alternative to -t)\n"
 "  -b, --buffer <MB>        PCAP buffer size in MB (default: 50)\n"
 "  -a, --proto-path         Show per-protocol-path statistics\n"
+"  -s, --sessions           Show per-protocol session counts\n"
+"  -j, --json               Output statistics in JSON format\n"
+"  -T, --text               Explicitly set text output format (default)\n"
 "  -C, --no-color           Disable ANSI color output\n"
 "  -h, --help               Show this help message\n"
 "  -V, --version            Print version information\n"
@@ -56,6 +59,9 @@ static const char *capture_help =
 "  -i, --interface <iface>  Network interface to capture from (required)\n"
 "  -b, --buffer <MB>        PCAP buffer size in MB (default: 50)\n"
 "  -a, --proto-path         Show per-protocol-path statistics\n"
+"  -s, --sessions           Show per-protocol session counts\n"
+"  -j, --json               Output statistics in JSON format\n"
+"  -T, --text               Explicitly set text output format (default)\n"
 "  -C, --no-color           Disable ANSI color output\n"
 "  -h, --help               Show this help message\n"
 "  -V, --version            Print version information\n"
@@ -98,16 +104,19 @@ static const char *general_help =
 /* ------------------------------------------------------------------ */
 
 static const struct option long_options[] = {
-    { "trace",       required_argument, NULL, 't' },
-    { "interface",   required_argument, NULL, 'i' },
-    { "buffer",      required_argument, NULL, 'b' },
-    { "proto-path",  no_argument,       NULL, 'a' },
-    { "ip-classify", required_argument, NULL, 'x' },
+    { "trace",         required_argument, NULL, 't' },
+    { "interface",     required_argument, NULL, 'i' },
+    { "buffer",        required_argument, NULL, 'b' },
+    { "proto-path",    no_argument,       NULL, 'a' },
+    { "sessions",      no_argument,       NULL, 's' },
+    { "json",          no_argument,       NULL, 'j' },
+    { "text",          no_argument,       NULL, 'T' },
+    { "ip-classify",   required_argument, NULL, 'x' },
     { "hostname-classify", required_argument, NULL, 'y' },
     { "port-classify", required_argument, NULL, 'z' },
-    { "help",        no_argument,       NULL, 'h' },
-    { "version",     no_argument,       NULL, 'V' },
-    { "no-color",    no_argument,       NULL, 'C' },
+    { "help",          no_argument,       NULL, 'h' },
+    { "version",       no_argument,       NULL, 'V' },
+    { "no-color",      no_argument,       NULL, 'C' },
     { NULL, 0, NULL, 0 }
 };
 
@@ -116,15 +125,17 @@ static const struct option long_options[] = {
 /* ------------------------------------------------------------------ */
 
 void parse_init(cli_options_t *opts) {
-    opts->input         = NULL;
-    opts->mode          = 0;
-    opts->buffer_mb     = 50;
-    opts->proto_path    = 0;
-    opts->ip_classify   = 1;
+    opts->input           = NULL;
+    opts->mode            = 0;
+    opts->buffer_mb       = 50;
+    opts->proto_path      = 0;
+    opts->ip_classify     = 1;
     opts->hostname_classify = 1;
     opts->port_classify   = 1;
     opts->show_help       = 0;
     opts->no_color        = 0;
+    opts->output_format   = OUTPUT_FORMAT_TEXT;
+    opts->show_sessions   = 0;
 }
 
 int parse_options(int argc, char *argv[], cli_options_t *opts) {
@@ -174,7 +185,7 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
     /* Reset getopt state after argv shift */
     optind = 1;
 
-    while ((opt = getopt_long(argc, argv, "t:i:b:x:y:z:haVC",
+    while ((opt = getopt_long(argc, argv, "t:i:b:x:y:z:haVsjTC",
                               long_options, NULL)) != EOF) {
         switch (opt) {
         case 't':
@@ -217,6 +228,18 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
 
         case 'a':
             opts->proto_path = 1;
+            break;
+
+        case 's':
+            opts->show_sessions = 1;
+            break;
+
+        case 'j':
+            opts->output_format = OUTPUT_FORMAT_JSON;
+            break;
+
+        case 'T':
+            opts->output_format = OUTPUT_FORMAT_TEXT;
             break;
 
         case 'x': {
