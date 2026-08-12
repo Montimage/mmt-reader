@@ -119,8 +119,6 @@ static void signal_handler(int type) {
 }
 
 void mmt_setup_signals(void) {
-    sigset_t signal_set;
-    sigfillset(&signal_set);
     signal(SIGINT, signal_handler);
 }
 

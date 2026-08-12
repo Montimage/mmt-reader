@@ -47,18 +47,34 @@ int mmt_parse_args(int argc, char **argv, mmt_config_t *cfg) {
                 break;
             case 'b':
                 cfg->buffer_size = atoi(optarg);
+                if (cfg->buffer_size < 0) {
+                    fprintf(stderr, "Invalid buffer size: %s\n", optarg);
+                    usage(argv[0]);
+                }
                 break;
             case 'a':
                 cfg->proto_path_detail = 1;
                 break;
             case 'x':
                 cfg->ip_address_classify = atoi(optarg);
+                if (cfg->ip_address_classify != 0 && cfg->ip_address_classify != 1) {
+                    fprintf(stderr, "Invalid value for -x (0 or 1): %s\n", optarg);
+                    usage(argv[0]);
+                }
                 break;
             case 'y':
                 cfg->hostname_classify = atoi(optarg);
+                if (cfg->hostname_classify != 0 && cfg->hostname_classify != 1) {
+                    fprintf(stderr, "Invalid value for -y (0 or 1): %s\n", optarg);
+                    usage(argv[0]);
+                }
                 break;
             case 'z':
                 cfg->port_classify = atoi(optarg);
+                if (cfg->port_classify != 0 && cfg->port_classify != 1) {
+                    fprintf(stderr, "Invalid value for -z (0 or 1): %s\n", optarg);
+                    usage(argv[0]);
+                }
                 break;
             case 'h':
             default:

@@ -129,11 +129,10 @@ void display_stats(void) {
 
     proto_info_t *current = head;
     while (current != NULL) {
+        proto_info_t *next = current->next;
         printf("%10lu %10lu %10lu %20s\n", current->pkts, current->volume, current->payload, current->name);
-        current = current->next;
-        if (current != NULL && current->prev != NULL) {
-            free(current->prev);
-        }
+        free(current);
+        current = next;
     }
 
     printf(">>>>>> INPUT STATISTICS <<<<<< \n\n");

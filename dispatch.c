@@ -65,7 +65,11 @@ static int cmd_capture(const mmt_config_t *cfg) {
         return 1;
     }
 
-    (void)pcap_loop(pcap, -1, &capture_callback, (u_char *)mmt);
+    if (pcap_loop(pcap, -1, &capture_callback, (u_char *)mmt) < 0) {
+        fprintf(stderr, "[error] pcap_loop failed: %s\n", pcap_geterr(pcap));
+        pcap_close(pcap);
+        return 1;
+    }
     pcap_close(pcap);
     return 0;
 }
