@@ -7,7 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.2.0-beta.1] — 2025-07-13
+
+### Added
+
+- **Shell completions** — Bash, Zsh, and Fish tab-completion scripts ([#30](https://github.com/Montimage/mmt-reader/pull/30))
+- **Config file support** — INI-style `~/.mmtreader.conf` with per-command sections ([#32](https://github.com/Montimage/mmt-reader/pull/32))
+- **Anomaly detection hooks** — Extensible hook system for detecting network anomalies ([#31](https://github.com/Montimage/mmt-reader/pull/31))
+- **`capture` subcommand** — Live interface monitoring via positional interface support ([#28](https://github.com/Montimage/mmt-reader/pull/28))
+- **`--json` output** — Machine-consumable JSON output with `--sessions` flag ([#27](https://github.com/Montimage/mmt-reader/pull/27))
+- **Environment variables** — `MMTREADER_JSON`, `MMTREADER_NO_COLOR`, `MMTREADER_QUIET` plus `--quiet`/`--verbose` flags ([#26](https://github.com/Montimage/mmt-reader/pull/26))
+- **MMT-DPI engine** — Core deep packet inspection engine extracted into `core/engine.c` ([#21](https://github.com/Montimage/mmt-reader/pull/21))
+- **Global installer** — Self-contained one-command installer script ([#16](https://github.com/Montimage/mmt-reader/issues/16))
+
+### Changed
+
+- **Architecture overhaul** — Split `mmtReader.c` into thin entry point with modular architecture: `cli/parse.c`, `cli/output.c`, `utils/colors.c`, `utils/version.c` ([#20](https://github.com/Montimage/mmt-reader/pull/20), [#23](https://github.com/Montimage/mmt-reader/pull/23), [#24](https://github.com/Montimage/mmt-reader/pull/24), [#25](https://github.com/Montimage/mmt-reader/pull/25), [#21](https://github.com/Montimage/mmt-reader/pull/21))
+- **Makefile** — Updated for multi-file build
+
+### Fixed
+
+- **Config loading priority** — Custom config loaded after getopt loop so CLI flags take precedence ([#32](https://github.com/Montimage/mmt-reader/pull/32))
+- **Input validation** — Proper error messages, file existence checks, verbose diagnostics ([#26](https://github.com/Montimage/mmt-reader/pull/26))
+- **Exit codes** — `--help` returns 0, errors return 1/2 ([#8](https://github.com/Montimage/mmt-reader/pull/8))
+- **Man page** — Removed invalid `-i` from analyze section, completed GLOBAL OPTIONS docs ([#29](https://github.com/Montimage/mmt-reader/pull/29))
+
+### Documentation
+
+- **Doc reconciliation** — Reconciled all docs with codebase and generated missing docs ([#33](https://github.com/Montimage/mmt-reader/pull/33))
+- **OSS docs** — Added CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, and Apache 2.0 license ([#16](https://github.com/Montimage/mmt-reader/issues/16), [#15](https://github.com/Montimage/mmt-reader/issues/15))
+
+### Miscellaneous
+
+- Initial import from Bitbucket repository
 
 ---
 
