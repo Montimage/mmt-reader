@@ -1,287 +1,16 @@
-![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
-![Platform](https://img.shields.io/badge/platform-Linux-blue)
-![Language](https://img.shields.io/badge/language-C-brightgreen.svg)
-
-# Ask about network traffic. Get clear answers.
-
-mmtReader is a deep packet inspection engine that AI Agents use to analyze network traffic and produce human-readable reports with visualizations.
-
-[**Get Started ->**](#quick-start)
-
-## How It Works
-
-An AI Agent receives a natural language question about network traffic, runs mmtReader to inspect the packets, and returns a structured answer with visualizations.
-
-```mermaid
-flowchart LR
-    A[Human question\n"Which services are slow?"] --> B[AI Agent]
-    B --> C[mmtReader analyze\n-t capture.pcap -a]
-    C --> D[Protocol stats\nPacket counts, bandwidth,\nsessions per protocol]
-    D --> E[AI Agent]
-    E --> F[Human answer\nPlain language + diagram]
-```
-
-The AI Agent handles the translation: raw protocol statistics become plain language with actionable insights.
-
-## Agent Workflow
-
-```
-sequenceDiagram
-    participant Human as Human
-    participant Agent as AI Agent
-    participant Reader as mmtReader
-    
-    Human->>Agent: "Which services use the most bandwidth?"
-    Agent->>Reader: ./mmtReader analyze -t capture.pcap -a --json
-    Reader-->>Agent: {protocols: [{name: "HTTP", ...}, ...]}
-    Agent->>Human: "HTTP dominates at 57% of traffic (1.05 MB)"
-```
-
-## Architecture
-
-```
-[pcap file / network interface]
-        │
-        ▼
-  mmtReader.c (entry point)
-  ├── pcap_open_offline() / capture_init()
-        │
-        ▼
-  core/engine.c
-  ├── engine_process_packet() — MMT-DPI classification + extraction
-  ├── packet_handler() — update counters
-  ├── new_ipv4_session_handler() — count sessions
-  └── new_ipv6_session_handler() — count sessions
-        │
-        ▼
-  core/engine.c (stats aggregation)
-  ├── get_protocol_stats() — per-instance stats
-  ├── proto_hierarchy_ids_to_str() — path formatting
-  └── insert_proto_info() — sorted linked list
-        │
-        ▼
-  cli/output.c
-  ├── output_print_stats_ex() — format and print (TEXT or JSON)
-  └── engine_print_pcap_stats() — drop counts
-        │
-        ▼
-  engine_destroy() — cleanup resources
-```
-
-## Sample Output
-
-**Raw mmtReader output (what the Agent receives):**
-
-```
-MMT-SDK 1.0.0 - Montimage
-Build: Jul 22 2025 14:32:01
-
-Protocol Statistics (with path):
-  HTTP          :  1053 pkts,  1053910 data bytes,   453910 payload bytes
-    TCP.HTTP    :  1053 pkts,  1053910 data bytes,   453910 payload bytes
-  DNS           :   417 pkts,    31400 data bytes,     31400 payload bytes
-    UDP.DNS     :   417 pkts,     31400 data bytes,      31400 payload bytes
-  TLS           :   347 pkts,   101413 data bytes,    101413 payload bytes
-    TCP.TLS     :   347 pkts,    101413 data bytes,     101413 payload bytes
-  ICMP          :    44 pkts,     2752 data bytes,       2752 payload bytes
-    ICMP        :    44 pkts,      2752 data bytes,        2752 payload bytes
-
-Protocol Statistics:
-  HTTP          :  1053 pkts,  1053910 data bytes,   453910 payload bytes
-  DNS           :   417 pkts,    31400 data bytes,     31400 payload bytes
-  TLS           :   347 pkts,   101413 data bytes,    101413 payload bytes
-  ICMP          :    44 pkts,     2752 data bytes,       2752 payload bytes
-
-Input Statistics:
-  Packets      :  1861 packets
-  Data Volume  :  1189475 bytes
-  IPv4 Sessions:  142 sessions
-  Protocols    :  4 protocols
-  Duration     :  10.0 seconds
-  Bandwidth    :  118947 bytes/sec
-  PPS          :  186.1 packets/sec
-```
-
-**What the Agent tells the user:**
-
-> "The capture contains 1,861 packets over 10 seconds (186 pps). HTTP is the dominant protocol with 1,053 packets (57% of traffic). DNS accounts for 417 packets, TLS for 347, and ICMP for 44. There are 142 IPv4 sessions across 4 protocols."
-
-## Key Features
-
-| Feature | What you get |
-|---|---|
-| Natural language interface | Ask questions in plain English |
-| Protocol classification | Identify every protocol in the traffic |
-| Visual output | Mermaid-ready stats for embedding |
-| JSON output | Machine-readable for automation pipelines |
-| Live or offline | Analyze pcap files or monitor live interfaces |
-| Session tracking | Per-protocol IPv4/IPv6 session counts |
-
-## Quick Start
-
-Build mmtReader:
-
-```bash
-make build
-```
-
-Run a sample analysis:
-
-```bash
-./mmtReader analyze -t smallFlows.pcap -a
-```
-
-Install system-wide:
-
-```bash
-sudo ./install.sh
-```
-
-## Usage Examples
-
-**Question:** "What protocols are in this capture?"
-
-```bash
-# Agent runs:
-./mmtReader analyze -t capture.pcap -a
-```
-
-**Output the agent receives:**
-
-```
-Protocol Statistics (with path):
-  HTTP          :  1053 pkts,  1053910 data bytes,   453910 payload bytes
-    TCP.HTTP    :  1053 pkts,  1053910 data bytes,   453910 payload bytes
-  DNS           :   417 pkts,   31400 data bytes,    31400 payload bytes
-    UDP.DNS     :   417 pkts,    31400 data bytes,     31400 payload bytes
-  TLS           :   347 pkts,   101413 data bytes,    101413 payload bytes
-    TCP.TLS     :   347 pkts,    101413 data bytes,     101413 payload bytes
-  ICMP          :    44 pkts,     2752 data bytes,      2752 payload bytes
-    ICMP        :    44 pkts,      2752 data bytes,       2752 payload bytes
-```
-
-**Question:** "How much traffic is on port 443?"
-
-```bash
-# Agent runs with port classification:
-./mmtReader analyze -t capture.pcap -a -z 1
-```
-
-**Question:** "Show me the data in JSON for my dashboard:"
-
-```bash
-# Agent runs with JSON output:
-./mmtReader analyze -t capture.pcap --json -a -s
-```
-
-**JSON output the Agent receives:**
-
-```json
-{
-  "protocols": [
-    {
-      "name": "HTTP",
-      "packets_count": 1053,
-      "data_volume": 1053910,
-      "payload_volume": 453910,
-      "sessions": 142
-    },
-    {
-      "name": "DNS",
-      "packets_count": 417,
-      "data_volume": 31400,
-      "payload_volume": 31400,
-      "sessions": 0
-    }
-  ],
-  "input_stats": {
-    "packets": 1861,
-    "data_volume": 1189475,
-    "nb_ipv4_sessions": 142,
-    "nb_protocols": 4,
-    "duration": 10.0,
-    "bandwidth": 118947.5,
-    "pps": 186.1
-  }
-}
-```
-
-**Live monitoring:**
-
-```bash
-# Agent triggers live capture:
-sudo ./mmtReader capture eth0 -a -b 100
-```
-
-**Classification flags the Agent can toggle:**
-
-| Flag | Classification | Default | Use case |
-|------|---------------|---------|----------|
-| `-x` | IP address fingerprinting | On | Identify services by IP |
-| `-y` | Hostname (SNI) fingerprinting | On | Identify by domain name |
-| `-z` | Port number fingerprinting | On | Identify by port |
-| `-a` | Show protocol paths | Off | Full hierarchy (TCP.HTTP) |
-| `-s` | Session counts | Off | Per-protocol session tracking |
-| `--json` | JSON output | Off | Machine-readable output |
-
-## Comparison
-
-| | mmtReader | Raw pcap analysis | Wireshark |
-|---|---|---|---|
-| Natural language input | Yes | No | No |
-| AI-ready output | JSON + text | Raw bytes | GUI only |
-| Protocol paths | `-a` flag | Manual filtering | Manual filtering |
-| Session tracking | `-s` flag | Manual | Manual |
-| Root required (live) | Yes | Yes | Yes |
-
-## FAQ
-
-**How does the AI Agent use mmtReader?**
-
-The agent constructs the appropriate mmtReader command based on the question, runs it, and translates the output into plain language. The `--json` flag provides structured data for programmatic processing.
-
-**Can I use mmtReader without an AI Agent?**
-
-Yes. It is a standard CLI tool. Run `./mmtReader analyze -t file.pcap -a` for protocol stats, or `./mmtReader capture eth0 -a` for live monitoring.
-
-**What traffic types are supported?**
-
-Ethernet (DLT_EN10MB) traffic only. Both IPv4 and IPv6 are tracked.
-
-## Get Started
-
-Build:
-
-```bash
-make build
-```
-
-Analyze a pcap file:
-
-```bash
-./mmtReader analyze -t smallFlows.pcap -a
-```
-
-Live capture:
-
-```bash
-sudo ./mmtReader capture eth0 -a
-```
-
-[**User Guide ->**](docs/USER_GUIDE.md) · [**Architecture ->**](docs/ARCHITECTURE.md) · [**Development ->**](docs/DEVELOPMENT.md) · Apache 2.0 Licensed
-
----
-
-<details>
-<summary>Original Technical Documentation (click to expand)</summary>
-
-## MMT-Reader
+# MMT-Reader
 
 Lightweight CLI tool for deep packet inspection and per-protocol network statistics via MMT-DPI.
 
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Linux-blue)](https://www.linux.org/)
+[![Language](https://img.shields.io/badge/language-C-brightgreen.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
+
 MMT-Reader analyzes network traffic from pcap capture files or live network interfaces and produces per-protocol statistics including packet counts, data volume, payload volume, and protocol path hierarchies. It leverages the [MMT-DPI](https://bitbucket.org/montimage/mmt-dpi) library for deep packet inspection and protocol classification.
 
-### Key Features
+![MMT-Reader](mmt-reader.png)
+
+## Key Features
 
 - **Subcommand interface** — `analyze` for pcap files, `capture` for live interfaces
 - **Dual input modes** — Read from pcap files (offline) or live network interfaces (online)
@@ -296,9 +25,22 @@ MMT-Reader analyzes network traffic from pcap capture files or live network inte
 - **Graceful shutdown** — Press Ctrl+C to stop live capture and print final statistics
 - **Modular architecture** — Clean separation: engine (core/), CLI parsing (cli/), output rendering (cli/), capture (capture/), config (config/), utilities (utils/)
 
-### Installation
+## Quick Start
 
-#### System Dependencies
+```bash
+# Build (requires MMT-DPI installed)
+make build
+
+# Analyze a pcap file
+./mmtReader analyze -t smallFlows.pcap -a
+
+# Monitor a live interface (requires root)
+sudo ./mmtReader capture eth0 -a
+```
+
+## Installation
+
+### System Dependencies
 
 **Debian / Ubuntu:**
 
@@ -314,7 +56,7 @@ sudo yum group install "Development Tools"
 sudo yum install libpcap-devel
 ```
 
-#### MMT-DPI Library
+### MMT-DPI Library
 
 MMT-Reader requires the [MMT-DPI](https://bitbucket.org/montimage/mmt-dpi) library installed at `/opt/mmt/dpi/`:
 
@@ -330,13 +72,13 @@ MMT-Reader requires the [MMT-DPI](https://bitbucket.org/montimage/mmt-dpi) libra
 
 Install MMT-DPI following the upstream instructions before compiling.
 
-#### Compile
+### Compile
 
 ```bash
 make build
 ```
 
-#### Install Globally
+### Install Globally
 
 Make `mmtReader` available system-wide with the **self-contained installer** — it installs everything on a fresh machine:
 
@@ -369,15 +111,15 @@ sudo make install   # install to /usr/local
 sudo make uninstall # remove
 ```
 
-### Shell Completions
+## Shell Completions
 
 Install shell completions for tab-completion of subcommands, flags, and file paths.
 
-#### Automatic (via installer)
+### Automatic (via installer)
 
 The `install.sh` script and `make install` both install bash completions automatically.
 
-#### Manual Installation
+### Manual Installation
 
 **Bash** — copy to your system completions directory:
 ```bash
@@ -404,7 +146,7 @@ mkdir -p ~/.config/fish/completions
 cp completions/mmtReader.fish ~/.config/fish/completions/mmtReader.fish
 ```
 
-### Usage
+## Usage
 
 MMT-Reader uses a subcommand-based interface. Available commands:
 
@@ -413,7 +155,7 @@ MMT-Reader uses a subcommand-based interface. Available commands:
 | `analyze` | Analyze a PCAP trace file (offline mode) |
 | `capture` | Capture and analyze live network traffic (online mode) |
 
-#### Global Options
+### Global Options
 
 | Flag | Argument | Default | Description |
 |------|----------|---------|-------------|
@@ -430,7 +172,7 @@ MMT-Reader uses a subcommand-based interface. Available commands:
 
 > **Note:** `-x`, `-y`, and `-z` are hidden from `--help` but fully functional.
 
-#### `analyze` Subcommand
+### `analyze` Subcommand
 
 ```bash
 ./mmtReader analyze [OPTIONS]
@@ -446,7 +188,7 @@ MMT-Reader uses a subcommand-based interface. Available commands:
 
 No root privileges required. Reads and replays traffic deterministically.
 
-#### `capture` Subcommand
+### `capture` Subcommand
 
 ```bash
 ./mmtReader capture [OPTIONS] [interface]
@@ -463,7 +205,7 @@ No root privileges required. Reads and replays traffic deterministically.
 
 Requires root/administrator privileges. Interface must be Ethernet (DLT_EN10MB).
 
-#### Usage Examples
+### Usage Examples
 
 ```bash
 # Analyze a pcap file with protocol paths
@@ -485,7 +227,7 @@ sudo ./mmtReader capture eth0 -b 100 -a
 ./mmtReader analyze -t capture.pcap -v -q
 ```
 
-#### Output Format
+### Output Format
 
 MMT-Reader prints four sections at the end of execution:
 
@@ -494,7 +236,7 @@ MMT-Reader prints four sections at the end of execution:
 3. **Input statistics** — summary: packets, data volume, sessions, protocols, duration, bandwidth, pps, fps
 4. **PCAP statistics** (online mode only) — received packets and kernel/driver drop counts
 
-### Project Structure
+## Project Structure
 
 ```
 mmtReader/
@@ -538,7 +280,7 @@ mmtReader/
     └── TESTING.md         # Test suite guide
 ```
 
-### Documentation
+## Documentation
 
 | Document | Description |
 |----------|-------------|
@@ -549,24 +291,22 @@ mmtReader/
 | [TESTING.md](docs/TESTING.md) | Test suite guide and how to run tests |
 | [CHANGELOG.md](docs/CHANGELOG.md) | Version history and release notes |
 
-### Related Publications
+## Related Publications
 
 > _To be filled in step 5 with links to papers, presentations, or blog posts about MMT-DPI and MMT-Reader._
 
-### Contributing
+## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on reporting bugs, submitting feature requests, and code style conventions.
 
-### License
+## License
 
 This project is licensed under the [Apache License 2.0](LICENSE).
 
-### Acknowledgments
+## Acknowledgments
 
 - **[MMT-DPI](https://bitbucket.org/montimage/mmt-dpi)** — Deep packet inspection library providing protocol classification and attribute extraction
 - **libpcap** — Portable packet capture library
 - **Montimage** — Original author and maintainer
 
 For questions or support, contact: [contact@montimage.com](mailto:contact@montimage.com)
-
-</details>
