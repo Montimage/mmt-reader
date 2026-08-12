@@ -4,7 +4,7 @@ description: "Analyze pcap files or live interfaces with the mmtReader DPI CLI, 
 license: "Apache-2.0"
 effort: medium
 metadata:
-  version: "1.3.0"
+  version: "1.4.0"
   author: "Luong NGUYEN"
 ---
 
@@ -36,9 +36,17 @@ mmtReader analyze -t <pcap-file> --json -a -s
 | `-t` / `--trace` | Path to the pcap file (**required**) |
 | `--json` | Machine-readable JSON output — always use it, then parse |
 | `-a` / `--proto-path` | **Required for any protocol data.** Without it `protocols[]` comes back empty and `protocol_paths` is absent entirely — not just the hierarchy, everything |
-| `-s` / `--sessions` | Requests per-protocol session counts. Currently a no-op: `protocols[].sessions` reads 0 regardless. Keep it for forward compatibility |
+| `-s` / `--sessions` | Requests per-protocol session counts. Currently a no-op — keep it for forward compatibility |
 
-For live traffic, the equivalent is `sudo mmtReader capture <interface> --json -a -s`. Run one command and answer from its JSON — do not re-run with different flags hoping for a better shape.
+For live traffic, **the live run** — `-q` is **not optional**:
+
+```bash
+mmtReader capture <interface> -q -a -s --json
+```
+
+Without `-q` a human-readable stats block precedes the JSON and the output will not parse. Live capture needs root, or `cap_net_raw` as granted by `install.sh`. Stop with `Ctrl+C`.
+
+Run one command and answer from its JSON — do not re-run with different flags hoping for a better shape.
 
 ## Instructions
 
@@ -46,7 +54,7 @@ Follow these steps in order.
 
 1. **Confirm the binary exists.** Run `mmtReader --version`. If it exits non-zero, read `references/installation.md` and follow it; do not improvise an install.
 2. **Resolve the input.** Take the pcap path from the user. If none was given, search the working directory for `*.pcap` / `*.cap` and offer what you find; if nothing matches, ask for the path. Never guess a path and never analyze a file the user did not name or confirm.
-3. **Choose the mode.** A file path means offline analysis via **the standard run**. An interface name means live capture — before running it, get explicit confirmation, because it needs `sudo` and reads other people's traffic (see **Safety**).
+3. **Choose the mode.** A file path means offline analysis via **the standard run**; an interface name means **the live run**. Get explicit confirmation before any live capture — it reads other people's traffic (see **Safety**).
 4. **Run the command once**, capturing both stdout and the exit code.
 5. **Verify the run succeeded** against the checkable bar below. If it fails, go to **Error handling** — do not report statistics from a failed run.
 6. **Extract only the fields the question needs** from the JSON (see **Output Format**).
@@ -58,9 +66,9 @@ The run succeeded when **all three** hold:
 
 - The process exited `0`
 - stdout parses as JSON
-- `input_stats.packets > 0`
+- **Offline:** `input_stats.packets > 0`. **Live:** `len(protocols[]) > 0` — live captures always report `packets: 0` and `duration_seconds: 1.0`, so those two fields cannot be used as the bar or quoted in an answer.
 
-Zero packets with exit `0` means the capture is empty or the filter matched nothing — say so explicitly rather than reporting "no traffic detected" as a finding about the network.
+Failing the bar with exit `0` means the capture is empty or matched nothing — say so explicitly rather than reporting "no traffic detected" as a finding about the network.
 
 ## Output Format
 
@@ -123,16 +131,15 @@ Every answer this skill produces must have all four parts. Check them before rep
 1. **A direct answer sentence** naming the specific protocol, number, or interface asked about.
 2. **Supporting figures with units** — bytes rendered as KB/MB/GB, rates as KB/s or MB/s, shares as percentages of `input_stats.packets` or of the derived total bytes.
 3. **The command that produced them**, so the user can re-run it.
-4. **Any limitation that changed the answer** — DPI misclassification, `sessions: 0`, empty `anomalies[]` — stated plainly, or omitted if none applied.
+4. **Any limitation that changed the answer** — DPI misclassification, `sessions: 0`, unusable live packet counts — stated plainly, or omitted if none applied.
 
 ```
-The capture holds 14,261 packets over 298 seconds (9.2 MB, ~30 KB/s average)
-across 168 sessions and 28 protocols. HTTP dominates at 5,287 packets
-(37%, 5.97 MB), followed by MSN at 3,735 packets (26%, 4.26 MB).
+The capture holds 14,261 packets over 298 seconds (9.2 MB, ~30.9 KB/s
+average) across 168 sessions and 28 protocols. HTTP dominates at 5,287
+packets (37%, 5.97 MB), followed by MSN at 3,735 (26%, 4.26 MB).
 
 Produced by: mmtReader analyze -t smallFlows.pcap --json -a -s
-Note: per-protocol session counts read 0 in this build, so the 168 sessions
-are a capture-wide total only.
+Note: per-protocol session counts read 0, so 168 is a capture-wide total.
 ```
 
 Do **not** reply with raw JSON, an unlabelled number, or a claim the run does not support. If the checkable success bar failed, report the error instead of an answer.
@@ -147,19 +154,19 @@ The hidden `-x` / `-y` / `-z` flags control IP, hostname, and port classificatio
 - **`sudo` is required for live capture only.** Offline pcap analysis needs no elevation — never add `sudo` to an `analyze` command to work around a permissions error; fix the file permissions instead.
 - **Captures are sensitive.** A pcap can contain credentials, hostnames, and personal data. Report aggregate statistics; quote raw packet contents only when the user asks. Do not copy pcap files or their contents to any external service.
 - **Never modify the capture.** This skill only reads. Do not delete, truncate, or rewrite a pcap, and do not run `install.sh`, `make install`, or any `sudo` command without showing it to the user first.
+- **Bound every live capture.** Use `-F <seconds>`, which exits on its own, rather than an open-ended run you have to remember to stop.
 
 ## Error handling
 
-Map the failure to its fix, then retry **once** at most; if it recurs, report the exact stderr rather than trying further variations. Exit codes: `0` success, `1` capture failure, `2` usage or input error. The error table and the edge cases (large files, WiFi, IPv6, top-talker `-F` captures, empty `protocols[]`) are in `references/troubleshooting.md` — read it whenever a run fails the success bar.
+Retry **once** at most; if it recurs, report the exact stderr rather than trying more variations. Exit codes: `0` success, `1` capture failure, `2` usage or input error. Read `references/troubleshooting.md` whenever a run fails the success bar — it holds the error table and the edge cases (large files, WiFi, IPv6, `-F` captures, empty `protocols[]`).
 
 ## Limitations
 
 State these when they affect the answer:
 
 - Classification is DPI-based — encrypted or custom protocols may be unidentified or misattributed.
-- Session tracking counts IPv4/IPv6 sessions, not individual flows.
-- mmtReader does not reconstruct payloads or extract application data beyond classification.
-- Live capture requires root and an Ethernet or WiFi interface.
+- Sessions are counted per IPv4/IPv6, not per flow. Use `-F` for real per-flow data.
+- mmtReader classifies only; it does not reconstruct payloads.
 
 ## References
 
