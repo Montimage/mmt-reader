@@ -23,6 +23,15 @@
 pcap_t *capture_init(const char *iname, uint16_t buffer_size, uint16_t snaplen);
 
 /**
+ * Close a handle created by capture_init().
+ * Clears the cached capture handle before closing it, so a signal
+ * arriving during/after the close cannot call pcap_breakloop() on
+ * freed memory. Passing NULL is a no-op.
+ * @param p  pcap handle returned by capture_init(), or NULL
+ */
+void capture_close(pcap_t *p);
+
+/**
  * Request the active capture loop to stop at the next opportunity.
  * Safe to call from a signal handler (only sets a flag via pcap_breakloop()).
  * May be called when no capture is active — it is a no-op in that case.

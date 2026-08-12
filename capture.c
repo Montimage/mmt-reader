@@ -163,11 +163,17 @@ pcap_t *capture_init(const char *iname, uint16_t buffer_size, uint16_t snaplen) 
         fprintf(stderr, "[warning] %s: %s\n", iname, pcap_geterr(my_pcap));
     }
 
-    /* Accept any datalink type — some WiFi drivers report non-standard values */
-    int dlt = pcap_datalink(my_pcap);
-
     g_capture_pcap = my_pcap;
     return my_pcap;
+}
+
+void capture_close(pcap_t *p) {
+    /* Clear the cached handle FIRST so a signal arriving mid-close sees
+     * NULL and skips pcap_breakloop() on an already-freed handle. */
+    g_capture_pcap = NULL;
+    if (p != NULL) {
+        pcap_close(p);
+    }
 }
 
 void capture_breakloop(void) {

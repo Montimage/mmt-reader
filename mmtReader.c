@@ -186,7 +186,7 @@ int main(int argc, char **argv) {
             flows = flows_create();
             if (flows == NULL) {
                 fprintf(stderr, "[error] Failed to allocate flow tracker\n");
-                pcap_close(pcap);
+                capture_close(pcap);
                 engine_destroy(eng);
                 return EXIT_FAILURE;
             }
@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
             /* Continuous capture until signal */
             pcap_loop(pcap, -1, capture_callback, NULL);
         }
-        pcap_close(pcap);
+        capture_close(pcap);
 
         /* Print final statistics before exit */
         if (!opts.quiet) {

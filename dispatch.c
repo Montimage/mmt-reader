@@ -70,10 +70,10 @@ static int cmd_capture(const mmt_config_t *cfg) {
 
     if (pcap_loop(pcap, -1, &capture_callback, NULL) < 0) {
         fprintf(stderr, "[error] pcap_loop failed: %s\n", pcap_geterr(pcap));
-        pcap_close(pcap);
+        capture_close(pcap);
         return 1;
     }
-    pcap_close(pcap);
+    capture_close(pcap);
     return 0;
 }
 

@@ -7,7 +7,7 @@
 #   2. MMT-DPI library      (builds from source if not present)
 #   3. mmtReader binary     (compiles and installs)
 #   4. Man page
-#   5. Shell capabilities   (cap_net_raw + cap_net_admin — no sudo for live capture)
+#   5. Shell capabilities   (cap_net_raw — no sudo for live capture)
 #   6. Shell completions (bash)
 #
 # Usage:
@@ -368,13 +368,13 @@ fi
 # ─── Phase 5: Set capabilities (live capture without sudo) ──
 if $HAS_SETCAP; then
     step "Phase 5: Setting capabilities for live capture (no sudo needed)..."
-    # Grant CAP_NET_RAW + CAP_NET_ADMIN so mmtReader can open interfaces in promiscuous mode
+    # Grant CAP_NET_RAW so mmtReader can open interfaces in promiscuous mode
     # without requiring root. This enables: ./mmtReader capture eth0 -a
     if $DRY_RUN; then
-        echo -e "${YELLOW}[DRY-RUN]${NC} setcap 'cap_net_raw,cap_net_admin=eip' '${BINDIR}/mmtReader'"
+        echo -e "${YELLOW}[DRY-RUN]${NC} setcap 'cap_net_raw+ep' '${BINDIR}/mmtReader'"
         info "Capabilities would be set (dry-run)."
-    elif setcap 'cap_net_raw,cap_net_admin=eip' "${BINDIR}/mmtReader" 2>/dev/null; then
-        info "Capabilities set: cap_net_raw + cap_net_admin"
+    elif setcap 'cap_net_raw+ep' "${BINDIR}/mmtReader" 2>/dev/null; then
+        info "Capabilities set: cap_net_raw"
     else
         echo ""
         echo -e "${YELLOW}╔══════════════════════════════════════════════════════════╗${NC}"
@@ -384,7 +384,7 @@ if $HAS_SETCAP; then
         echo -e "  ${YELLOW}setcap${NC} failed (likely because sudo didn't have a TTY)."
         echo "  Live capture will still require ${RED}sudo${NC} until you run this manually:"
         echo ""
-        echo -e "    ${GREEN}sudo setcap 'cap_net_raw,cap_net_admin=eip' ${BINDIR}/mmtReader${NC}"
+        echo -e "    ${GREEN}sudo setcap 'cap_net_raw+ep' ${BINDIR}/mmtReader${NC}"
         echo ""
         echo "  This lets mmtReader open interfaces in promiscuous mode"
         echo "  without needing root — so you can run:"
@@ -404,7 +404,7 @@ else
     echo ""
     echo "  Then set capabilities:"
     echo ""
-    echo -e "    ${GREEN}sudo setcap 'cap_net_raw,cap_net_admin=eip' ${BINDIR}/mmtReader${NC}"
+    echo -e "    ${GREEN}sudo setcap 'cap_net_raw+ep' ${BINDIR}/mmtReader${NC}"
     echo ""
 fi
 
@@ -419,14 +419,15 @@ if "${BINDIR}/mmtReader" -h &>/dev/null; then
     echo ""
 
     # Check if capabilities are already set
-    if getcap "${BINDIR}/mmtReader" &>/dev/null; then
+    # getcap exits 0 even when the file has no capabilities — test its output
+    if [[ -n "$(getcap "${BINDIR}/mmtReader" 2>/dev/null)" ]]; then
         echo "  Live capture (no sudo needed):"
         echo "    mmtReader capture eth0 -a -s"
         echo ""
     else
         echo "  ⚠️  Live capture still requires sudo. To remove that restriction, run manually:"
         echo ""
-        echo -e "    ${GREEN}sudo setcap 'cap_net_raw,cap_net_admin=eip' ${BINDIR}/mmtReader${NC}"
+        echo -e "    ${GREEN}sudo setcap 'cap_net_raw+ep' ${BINDIR}/mmtReader${NC}"
         echo ""
     fi
 
