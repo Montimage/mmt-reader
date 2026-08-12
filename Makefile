@@ -5,6 +5,7 @@ PREFIX      ?= /usr/local
 BINDIR      ?= $(PREFIX)/bin
 MANDIR      ?= $(PREFIX)/share/man
 MAN1DIR     ?= $(MANDIR)/man1
+COMPLETIONS ?= $(PREFIX)/share/bash-completion/completions
 
 CC          ?= gcc
 CFLAGS      ?= -g -O2
@@ -12,7 +13,7 @@ CFLAGS      ?= -g -O2
 SRCS        = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c
 TARGET      = mmtReader
 
-.PHONY: all build install uninstall clean test
+.PHONY: all build install uninstall clean test completions
 
 all: build
 
@@ -32,11 +33,14 @@ install: build
 	install -m 755 $(TARGET) $(BINDIR)/$(TARGET)
 	@mkdir -p $(MAN1DIR)
 	install -m 644 mmtReader.1 $(MAN1DIR)/mmtReader.1
+	@mkdir -p $(COMPLETIONS)
+	install -m 644 completions/mmtReader.bash $(COMPLETIONS)/mmtReader
 	@echo "Installed to $(BINDIR)/$(TARGET)"
 
 uninstall:
 	rm -f $(BINDIR)/$(TARGET)
 	rm -f $(MAN1DIR)/mmtReader.1
+	rm -f $(COMPLETIONS)/mmtReader
 	@echo "Uninstalled."
 
 clean:
@@ -54,5 +58,10 @@ test: build
 	@echo ""
 	@echo "=== Test 4: JSON with sessions ==="
 	./$(TARGET) analyze -t smallFlows.pcap -a --json --sessions 2>/dev/null | jq '.protocols[0].sessions' > /dev/null && echo "JSON sessions valid ✓"
+	@echo ""
+	@echo "=== Test 5: Completions exist ==="
+	@test -f completions/mmtReader.bash && echo "Bash completion ✓" || echo "Bash completion missing ✗"
+	@test -f completions/mmtReader.zsh && echo "Zsh completion ✓" || echo "Zsh completion missing ✗"
+	@test -f completions/mmtReader.fish && echo "Fish completion ✓" || echo "Fish completion missing ✗"
 	@echo ""
 	@echo "All tests passed!"
