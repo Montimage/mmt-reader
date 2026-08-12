@@ -9,7 +9,7 @@ MAN1DIR     ?= $(MANDIR)/man1
 CC          ?= gcc
 CFLAGS      ?= -g -O2
 
-SRCS        = mmtReader.c
+SRCS        = mmtReader.c core/engine.c
 TARGET      = mmtReader
 
 .PHONY: all build install uninstall clean test
@@ -19,7 +19,8 @@ all: build
 build: $(TARGET)
 
 $(TARGET): $(SRCS)
-	$(CC) $(CFLAGS) -o $@ $< \
+	$(CC) $(CFLAGS) -o $@ $^ \
+		-I. \
 		-I/opt/mmt/dpi/include \
 		-L/opt/mmt/dpi/lib \
 		-lmmt_core -ldl -lpcap
