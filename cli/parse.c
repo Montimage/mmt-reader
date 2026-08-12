@@ -15,6 +15,19 @@
 #include "parse.h"
 
 /* ------------------------------------------------------------------ */
+/* Environment variable helpers                                        */
+/* ------------------------------------------------------------------ */
+
+static int env_get_int(const char *name) {
+    const char *val = getenv(name);
+    if (val != NULL && val[0] != '\0') {
+        int ival = atoi(val);
+        return (ival != 0) ? 1 : 0;
+    }
+    return 0;
+}
+
+/* ------------------------------------------------------------------ */
 /* Constants                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -34,9 +47,16 @@ static const char *analyze_help =
 "  -i, --interface <iface>  Live network interface (alternative to -t)\n"
 "  -b, --buffer <MB>        PCAP buffer size in MB (default: 50)\n"
 "  -a, --proto-path         Show per-protocol-path statistics\n"
+"  -q, --quiet              Suppress progress output\n"
+"  -v, --verbose            Show verbose debug output\n"
 "  -C, --no-color           Disable ANSI color output\n"
 "  -h, --help               Show this help message\n"
 "  -V, --version            Print version information\n"
+"\n"
+"Environment variables:\n"
+"  MMTREADER_JSON=1         Force JSON output\n"
+"  MMTREADER_NO_COLOR=1     Disable color output\n"
+"  MMTREADER_QUIET=1        Enable quiet mode\n"
 "\n"
 "Hidden flags:\n"
 "  -x, --ip-classify <0|1>  IP address classification (default: 1)\n"
@@ -56,14 +76,16 @@ static const char *capture_help =
 "  -i, --interface <iface>  Network interface to capture from (required)\n"
 "  -b, --buffer <MB>        PCAP buffer size in MB (default: 50)\n"
 "  -a, --proto-path         Show per-protocol-path statistics\n"
+"  -q, --quiet              Suppress progress output\n"
+"  -v, --verbose            Show verbose debug output\n"
 "  -C, --no-color           Disable ANSI color output\n"
 "  -h, --help               Show this help message\n"
 "  -V, --version            Print version information\n"
 "\n"
-"Hidden flags:\n"
-"  -x, --ip-classify <0|1>  IP address classification (default: 1)\n"
-"  -y, --hostname-classify <0|1>  Hostname classification (default: 1)\n"
-"  -z, --port-classify <0|1>    Port number classification (default: 1)\n"
+"Environment variables:\n"
+"  MMTREADER_JSON=1         Force JSON output\n"
+"  MMTREADER_NO_COLOR=1     Disable color output\n"
+"  MMTREADER_QUIET=1        Enable quiet mode\n"
 "\n"
 "Exit codes:\n"
 "  0  Success or --help requested\n"
@@ -81,8 +103,15 @@ static const char *general_help =
 "Use \"%s <command> --help\" for command-specific help.\n"
 "\n"
 "General options:\n"
+"  -q, --quiet              Suppress progress output\n"
+"  -v, --verbose            Show verbose debug output\n"
 "  -h, --help       Show this help message\n"
 "  -V, --version    Print version information\n"
+"\n"
+"Environment variables:\n"
+"  MMTREADER_JSON=1         Force JSON output\n"
+"  MMTREADER_NO_COLOR=1     Disable color output\n"
+"  MMTREADER_QUIET=1        Enable quiet mode\n"
 "\n"
 "Hidden flags (available with any command):\n"
 "  -x, --ip-classify <0|1>         IP address classification (default: 1)\n"
@@ -102,6 +131,9 @@ static const struct option long_options[] = {
     { "interface",   required_argument, NULL, 'i' },
     { "buffer",      required_argument, NULL, 'b' },
     { "proto-path",  no_argument,       NULL, 'a' },
+    { "quiet",       no_argument,       NULL, 'q' },
+    { "verbose",     no_argument,       NULL, 'v' },
+    { "json",        no_argument,       NULL, 'J' },
     { "ip-classify", required_argument, NULL, 'x' },
     { "hostname-classify", required_argument, NULL, 'y' },
     { "port-classify", required_argument, NULL, 'z' },
@@ -125,6 +157,14 @@ void parse_init(cli_options_t *opts) {
     opts->port_classify   = 1;
     opts->show_help       = 0;
     opts->no_color        = 0;
+    opts->quiet           = 0;
+    opts->verbose         = 0;
+    opts->json            = 0;
+
+    /* Environment variables (lowest priority — CLI flags override these) */
+    opts->json    = env_get_int("MMTREADER_JSON");
+    opts->no_color = env_get_int("MMTREADER_NO_COLOR");
+    opts->quiet   = env_get_int("MMTREADER_QUIET");
 }
 
 int parse_options(int argc, char *argv[], cli_options_t *opts) {
@@ -174,7 +214,7 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
     /* Reset getopt state after argv shift */
     optind = 1;
 
-    while ((opt = getopt_long(argc, argv, "t:i:b:x:y:z:haVC",
+    while ((opt = getopt_long(argc, argv, "t:i:b:x:y:z:haVCqJv",
                               long_options, NULL)) != EOF) {
         switch (opt) {
         case 't':
@@ -258,6 +298,18 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
             opts->no_color = 1;
             break;
 
+        case 'q':
+            opts->quiet = 1;
+            break;
+
+        case 'v':
+            opts->verbose = 1;
+            break;
+
+        case 'J':
+            opts->json = 1;
+            break;
+
         case 'h':
             opts->show_help = 1;
             if (subcmd == SUBCMD_ANALYZE) {
@@ -275,8 +327,12 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
 
     /* Validate: input is required for both subcommands */
     if (!has_input) {
-        fprintf(stderr, "Error: missing required option\n");
         if (subcmd == SUBCMD_ANALYZE) {
+            parse_validate_error(prog_name, "missing --trace file path");
+        } else if (subcmd == SUBCMD_CAPTURE) {
+            parse_validate_error(prog_name, "missing --interface name");
+        } else {
+            fprintf(stderr, "Error: missing required option\n");
             fprintf(stderr, "Use --help for usage information\n");
         }
         parse_error(prog_name);
@@ -288,4 +344,10 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
 void parse_error(const char *prog_name) {
     fprintf(stderr, "Use \"%s --help\" for usage information\n", prog_name);
     exit(PARSE_EXIT_ERROR);
+}
+
+void parse_validate_error(const char *prog_name, const char *msg) {
+    fprintf(stderr, "Error: %s\n", msg);
+    /* Print relevant help section based on subcommand context */
+    (void)prog_name;
 }
