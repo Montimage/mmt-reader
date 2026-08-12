@@ -216,35 +216,32 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
             break;
 
         case 'x': {
-            char *endptr;
-            long val = strtol(optarg, &endptr, 10);
-            if (*endptr != '\0' || val != 0 && val != 1) {
+            int val = atoi(optarg);
+            if (val != 0 && val != 1) {
                 fprintf(stderr, "Error: --ip-classify must be 0 or 1\n");
                 parse_error(prog_name);
             }
-            opts->ip_classify = (int)val;
+            opts->ip_classify = val;
             break;
         }
 
         case 'y': {
-            char *endptr;
-            long val = strtol(optarg, &endptr, 10);
-            if (*endptr != '\0' || val != 0 && val != 1) {
+            int val = atoi(optarg);
+            if (val != 0 && val != 1) {
                 fprintf(stderr, "Error: --hostname-classify must be 0 or 1\n");
                 parse_error(prog_name);
             }
-            opts->hostname_classify = (int)val;
+            opts->hostname_classify = val;
             break;
         }
 
         case 'z': {
-            char *endptr;
-            long val = strtol(optarg, &endptr, 10);
-            if (*endptr != '\0' || val != 0 && val != 1) {
+            int val = atoi(optarg);
+            if (val != 0 && val != 1) {
                 fprintf(stderr, "Error: --port-classify must be 0 or 1\n");
                 parse_error(prog_name);
             }
-            opts->port_classify = (int)val;
+            opts->port_classify = val;
             break;
         }
 
