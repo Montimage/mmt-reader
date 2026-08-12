@@ -60,8 +60,11 @@ test: build
 	./$(TARGET) analyze -t smallFlows.pcap -a --json 2>/dev/null | jq '.input_stats.packets' > /dev/null && echo "JSON valid OK"
 	@echo ""
 	@echo "=== Test 2b: input_stats agrees with protocols[] ==="
-	@# Run without -a on purpose: protocols[] must be populated either way
-	./$(TARGET) analyze -t smallFlows.pcap --json 2>/dev/null | jq -e '(.input_stats.data_volume > 0) and (.input_stats.protocols > 0) and (.input_stats.data_volume == (.protocols[] | select(.name=="ethernet") | .data_volume)) and (.input_stats.protocols == (.protocols | length)) and (((.input_stats.bandwidth_bytes_per_sec - (.input_stats.data_volume / .input_stats.duration_seconds)) | if . < 0 then -. else . end) < 1)' > /dev/null && echo "Aggregate input_stats OK"
+	@# Run without -a on purpose: protocols[] must be populated either way.
+	@# The ethernet match is compared as a list so a duplicate entry cannot
+	@# be masked, and bandwidth uses a relative tolerance so the check does
+	@# not become trace-dependent.
+	./$(TARGET) analyze -t smallFlows.pcap --json 2>/dev/null | jq -e '(.input_stats.data_volume > 0) and (.input_stats.protocols > 0) and ([.protocols[] | select(.name=="ethernet") | .data_volume] == [.input_stats.data_volume]) and (.input_stats.protocols == (.protocols | length)) and (.input_stats.protocols == ([.protocols[] | select(.packets > 0)] | length)) and ((((.input_stats.bandwidth_bytes_per_sec - (.input_stats.data_volume / .input_stats.duration_seconds)) / .input_stats.bandwidth_bytes_per_sec) | if . < 0 then -. else . end) < 0.001)' > /dev/null && echo "Aggregate input_stats OK"
 	@echo ""
 	@echo "=== Test 3: Sessions flag ==="
 	./$(TARGET) analyze -t smallFlows.pcap -a --sessions 2>&1 | grep "IPv4 Sessions" > /dev/null && echo "Sessions flag works OK"

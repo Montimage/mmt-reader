@@ -11,8 +11,16 @@
  * per-protocol totals the same way cli/output.c builds the `protocols[]`
  * table — sum `data_volume` over the touched instances of each protocol
  * id — and require the aggregate to agree. A field that regresses to
- * zero, or a hand-rolled counter that drifts from the DPI's accounting,
- * fails here.
+ * zero fails here, as does a counter that drifts from the DPI's own
+ * accounting — a packet fed but never classified breaks the nb_packets
+ * assertions.
+ *
+ * What these tests deliberately do NOT prove: that the values are *read*
+ * from MMT-DPI rather than recomputed. The DPI's data_volume is itself
+ * the running sum of hdr->len, so a hand-rolled tally of the same
+ * quantity is numerically identical and no assertion can separate the
+ * two. "Take it from the DPI, do not recompute it" is a rule about the
+ * shape of the code, enforced by review, not by these numbers.
  *
  * Both entry points are covered: engine_process_packet(), which the
  * offline `analyze` path calls directly, and engine_process_packet_cb(),
@@ -214,8 +222,12 @@ static void check_aggregate(feed_mode_t mode) {
                   "data_volume matches the ethernet entry of protocols[]");
     ASSERT_U64_EQ(eth.packets, stats.nb_packets,
                   "nb_packets matches the ethernet entry of protocols[]");
+    /* Same definition engine.c uses: protocols the DPI saw packets for.
+     * The `protocols[]` array is built by a different rule (an entry per
+     * non-NULL stats list), so that comparison belongs in the jq check,
+     * not here. */
     ASSERT_U64_EQ(eth.nb_touched, stats.nb_protocols,
-                  "nb_protocols equals the number of protocols in protocols[]");
+                  "nb_protocols equals the count of protocols the DPI saw packets for");
 
     /* Every packet offered was accounted for */
     ASSERT_U64_EQ((uint64_t)fed, stats.nb_packets,
