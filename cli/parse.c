@@ -138,29 +138,21 @@ static const char *general_help =
 /* ------------------------------------------------------------------ */
 
 static const struct option long_options[] = {
-    { "trace",         required_argument, NULL, 't' },
-    { "interface",     required_argument, NULL, 'i' },
-    { "buffer",        required_argument, NULL, 'b' },
-    { "proto-path",    no_argument,       NULL, 'a' },
-    { "sessions",      no_argument,       NULL, 's' },
-    { "json",          no_argument,       NULL, 'j' },
-    { "text",          no_argument,       NULL, 'T' },
-    { "ip-classify",   required_argument, NULL, 'x' },
-
-    { "trace",       required_argument, NULL, 't' },
-    { "interface",   required_argument, NULL, 'i' },
-    { "buffer",      required_argument, NULL, 'b' },
-    { "proto-path",  no_argument,       NULL, 'a' },
-    { "quiet",       no_argument,       NULL, 'q' },
-    { "verbose",     no_argument,       NULL, 'v' },
-    { "json",        no_argument,       NULL, 'J' },
-    { "ip-classify", required_argument, NULL, 'x' },
-
+    { "trace",           required_argument, NULL, 't' },
+    { "interface",       required_argument, NULL, 'i' },
+    { "buffer",          required_argument, NULL, 'b' },
+    { "proto-path",      no_argument,       NULL, 'a' },
+    { "sessions",        no_argument,       NULL, 's' },
+    { "json",            no_argument,       NULL, 'j' },
+    { "text",            no_argument,       NULL, 'T' },
+    { "quiet",           no_argument,       NULL, 'q' },
+    { "verbose",         no_argument,       NULL, 'v' },
+    { "ip-classify",     required_argument, NULL, 'x' },
     { "hostname-classify", required_argument, NULL, 'y' },
-    { "port-classify", required_argument, NULL, 'z' },
-    { "help",          no_argument,       NULL, 'h' },
-    { "version",       no_argument,       NULL, 'V' },
-    { "no-color",      no_argument,       NULL, 'C' },
+    { "port-classify",   required_argument, NULL, 'z' },
+    { "help",            no_argument,       NULL, 'h' },
+    { "version",         no_argument,       NULL, 'V' },
+    { "no-color",        no_argument,       NULL, 'C' },
     { NULL, 0, NULL, 0 }
 };
 
@@ -239,10 +231,7 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
     /* Reset getopt state after argv shift */
     optind = 1;
 
-    while ((opt = getopt_long(argc, argv, "t:i:b:x:y:z:haVsjTC",
-
-    while ((opt = getopt_long(argc, argv, "t:i:b:x:y:z:haVCqJv",
-
+    while ((opt = getopt_long(argc, argv, "t:i:b:haVsqjTCx:y:z:",
                               long_options, NULL)) != EOF) {
         switch (opt) {
         case 't':
@@ -296,6 +285,7 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
             break;
 
         case 'j':
+        case 'J':
             opts->output_format = OUTPUT_FORMAT_JSON;
             break;
 
@@ -350,10 +340,6 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
             opts->verbose = 1;
             break;
 
-        case 'J':
-            opts->json = 1;
-            break;
-
         case 'h':
             opts->show_help = 1;
             if (subcmd == SUBCMD_ANALYZE) {
@@ -367,6 +353,13 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
             parse_error(prog_name);
             break;
         }
+    }
+
+    /* Support positional argument: "capture eth0" without -i */
+    if (subcmd == SUBCMD_CAPTURE && !has_input && optind < argc) {
+        opts->input = argv[optind];
+        opts->mode  = 2; /* LIVE_INTERFACE */
+        has_input   = 1;
     }
 
     /* Validate: input is required for both subcommands */
