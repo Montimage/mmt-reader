@@ -34,6 +34,7 @@ static const char *analyze_help =
 "  -i, --interface <iface>  Live network interface (alternative to -t)\n"
 "  -b, --buffer <MB>        PCAP buffer size in MB (default: 50)\n"
 "  -a, --proto-path         Show per-protocol-path statistics\n"
+"  -C, --no-color           Disable ANSI color output\n"
 "  -h, --help               Show this help message\n"
 "  -V, --version            Print version information\n"
 "\n"
@@ -55,6 +56,7 @@ static const char *capture_help =
 "  -i, --interface <iface>  Network interface to capture from (required)\n"
 "  -b, --buffer <MB>        PCAP buffer size in MB (default: 50)\n"
 "  -a, --proto-path         Show per-protocol-path statistics\n"
+"  -C, --no-color           Disable ANSI color output\n"
 "  -h, --help               Show this help message\n"
 "  -V, --version            Print version information\n"
 "\n"
@@ -105,6 +107,7 @@ static const struct option long_options[] = {
     { "port-classify", required_argument, NULL, 'z' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'V' },
+    { "no-color",    no_argument,       NULL, 'C' },
     { NULL, 0, NULL, 0 }
 };
 
@@ -120,7 +123,8 @@ void parse_init(cli_options_t *opts) {
     opts->ip_classify   = 1;
     opts->hostname_classify = 1;
     opts->port_classify   = 1;
-    opts->show_help     = 0;
+    opts->show_help       = 0;
+    opts->no_color        = 0;
 }
 
 int parse_options(int argc, char *argv[], cli_options_t *opts) {
@@ -170,7 +174,7 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
     /* Reset getopt state after argv shift */
     optind = 1;
 
-    while ((opt = getopt_long(argc, argv, "t:i:b:x:y:z:haV",
+    while ((opt = getopt_long(argc, argv, "t:i:b:x:y:z:haVC",
                               long_options, NULL)) != EOF) {
         switch (opt) {
         case 't':
@@ -249,6 +253,10 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
             /* Delegate to version module — caller handles exit */
             opts->mode = 3; /* VERSION */
             return PARSE_EXIT_OK;
+
+        case 'C':
+            opts->no_color = 1;
+            break;
 
         case 'h':
             opts->show_help = 1;

@@ -19,6 +19,7 @@
 #endif
 #include "core/engine.h"
 #include "utils/version.h"
+#include "utils/colors.h"
 #include "cli/parse.h"
 
 static volatile sig_atomic_t got_signal = 0;
@@ -70,12 +71,18 @@ static pcap_t *init_pcap(const char *iname, uint16_t buffer_size, uint16_t snapl
 int main(int argc, char **argv) {
     cli_options_t opts;
 
+    /* Initialize color support (respects NO_COLOR env var) */
+    colors_init();
     /* Parse options (may exit on --version or --help) */
     int rc = parse_options(argc, argv, &opts);
     if (rc != PARSE_EXIT_OK) {
         return EXIT_FAILURE;
     }
 
+    /* Override color support if --no-color was passed */
+    if (opts.no_color) {
+        colors_set_enabled(0);
+    }
     /* If --version was requested, print banner + version and exit */
     if (opts.mode == 3) {
         version_banner(argv[0]);
