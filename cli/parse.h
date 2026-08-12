@@ -11,6 +11,7 @@
 #define PARSE_H
 
 #include <stdio.h>
+#include "../core/engine.h"
 
 /* ------------------------------------------------------------------ */
 /* Exit codes                                                          */
@@ -39,9 +40,13 @@ typedef struct {
     int         port_classify;    /**< port number classification (-z)    */
     int         show_help;      /**< 1 if --help was shown              */
     int         no_color;       /**< 1 if --no-color is set             */
+    int         output_format;  /**< 0=text (default), 1=json           */
+    int         show_sessions;  /**< 1 to show per-session breakdown (-s) */
+
     int         quiet;          /**< 1 if --quiet / MMTREADER_QUIET=1   */
     int         verbose;        /**< 1 if --verbose / -v                */
     int         json;           /**< 1 if --json / MMTREADER_JSON=1     */
+
 } cli_options_t;
 
 /* ------------------------------------------------------------------ */

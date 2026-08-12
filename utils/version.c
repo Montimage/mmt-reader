@@ -16,13 +16,13 @@
 
 #define BANNER_LINE "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n"
 
-static void banner_print(const char *prog_name) {
-    printf(BANNER_LINE);
-    printf("|\t\t MONTIMAGE\n");
-    printf("|\t MMT-SDK version: %s\n", mmt_version());
-    printf("|\t %s: built %s %s\n", prog_name, __DATE__, __TIME__);
-    printf("|\t http://montimage.com\n");
-    printf(BANNER_LINE);
+static void banner_print(const char *prog_name, FILE *fp) {
+    fprintf(fp, BANNER_LINE);
+    fprintf(fp, "|\t\t MONTIMAGE\n");
+    fprintf(fp, "|\t MMT-SDK version: %s\n", mmt_version());
+    fprintf(fp, "|\t %s: built %s %s\n", prog_name, __DATE__, __TIME__);
+    fprintf(fp, "|\t http://montimage.com\n");
+    fprintf(fp, BANNER_LINE);
 }
 
 /* ------------------------------------------------------------------ */
@@ -30,7 +30,11 @@ static void banner_print(const char *prog_name) {
 /* ------------------------------------------------------------------ */
 
 void version_banner(const char *prog_name) {
-    banner_print(prog_name);
+    banner_print(prog_name, stdout);
+}
+
+void version_banner_fd(const char *prog_name, FILE *fp) {
+    banner_print(prog_name, fp);
 }
 
 void version_print(void) {

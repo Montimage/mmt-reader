@@ -104,6 +104,14 @@ int main(int argc, char **argv) {
         return EXIT_SUCCESS;
     }
 
+    /* Banner (after --version/--help check)
+     * Redirect to stderr for JSON output to keep stdout clean */
+    if (opts.output_format == OUTPUT_FORMAT_JSON) {
+        version_banner_fd(argv[0], stderr);
+    } else {
+        version_banner(argv[0]);
+    }
+
     /* Verbose: print startup diagnostics to stderr */
     if (opts.verbose) {
         fprintf(stderr, "DEBUG: verbose mode enabled\n");
@@ -113,6 +121,7 @@ int main(int argc, char **argv) {
 
     /* Banner (after --version/--help check) */
     version_banner(argv[0]);
+
 
     /* Create engine */
     char mmt_errbuf[1024];
@@ -129,6 +138,10 @@ int main(int argc, char **argv) {
 
     /* Enable per-protocol-path detail if requested */
     engine_set_proto_path_detail(eng, opts.proto_path);
+
+    /* Set output format and session display options */
+    engine_set_output_format(eng, (output_format_t)opts.output_format);
+    engine_set_show_sessions(eng, opts.show_sessions);
 
     /* Set up signal handling */
     signal(SIGINT, signal_handler);
