@@ -171,4 +171,64 @@ void engine_print_stats(const engine_t *eng);
  */
 void engine_print_pcap_stats(const struct pcap_stat *pcs);
 
+/* ------------------------------------------------------------------ */
+/* Anomaly detection (future extension)                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Opaque anomaly detection context.
+ */
+typedef struct anomaly_ctx anomaly_ctx_t;
+
+/**
+ * Anomaly type classification.
+ */
+typedef enum {
+    ANOMALY_NONE = 0,           /**< No anomaly detected             */
+    ANOMALY_UNUSUAL_TRAFFIC,    /**< Unusual traffic pattern         */
+    ANOMALY_PROTOCOL_VIOLATION, /**< Protocol violation detected     */
+    ANOMALY_SECURITY_THREAT     /**< Security threat detected        */
+} anomaly_type_t;
+
+/**
+ * Anomaly detection result for a single packet.
+ */
+typedef struct {
+    anomaly_type_t type;        /**< Type of anomaly (ANOMALY_NONE = no anomaly) */
+    int severity;               /**< Severity level (0-100, higher = more severe) */
+    char description[128];      /**< Human-readable description                */
+} anomaly_result_t;
+
+/**
+ * Create an anomaly detection context.
+ *
+ * This hook is called during engine creation to initialize the anomaly
+ * detection subsystem. The default implementation returns a no-op context.
+ *
+ * @return Opaque anomaly context pointer, or NULL if disabled
+ */
+anomaly_ctx_t *anomaly_ctx_create(void);
+
+/**
+ * Destroy an anomaly detection context and release resources.
+ * @param ctx Anomaly context (NULL is safe)
+ */
+void anomaly_ctx_destroy(anomaly_ctx_t *ctx);
+
+/**
+ * Run anomaly detection on a processed packet.
+ *
+ * This hook is called after each packet is processed by the DPI engine.
+ * The default implementation returns ANOMALY_NONE for all packets.
+ *
+ * @param ctx  Anomaly context (may be NULL if detection is disabled)
+ * @param hdr  Packet header (timestamp, length)
+ * @param data Raw packet bytes
+ * @param out  Caller-allocated anomaly result (filled in on detection)
+ */
+void anomaly_detect(anomaly_ctx_t *ctx,
+                    const struct pkthdr *hdr,
+                    const u_char *data,
+                    anomaly_result_t *out);
+
 #endif /* ENGINE_H */

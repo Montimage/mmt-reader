@@ -17,6 +17,50 @@
 #include "output.h"
 
 /* ------------------------------------------------------------------ */
+/* Anomaly detection default implementation                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Default no-op anomaly detection context.
+ * Future implementations can extend this struct with detection state.
+ */
+struct anomaly_ctx {
+    int enabled;  /**< Whether anomaly detection is active */
+};
+
+anomaly_ctx_t *anomaly_ctx_create(void) {
+    anomaly_ctx_t *ctx = (anomaly_ctx_t *)calloc(1, sizeof(anomaly_ctx_t));
+    if (ctx == NULL) {
+        return NULL;
+    }
+    ctx->enabled = 0;  /* Disabled by default */
+    return ctx;
+}
+
+void anomaly_ctx_destroy(anomaly_ctx_t *ctx) {
+    if (ctx != NULL) {
+        free(ctx);
+    }
+}
+
+void anomaly_detect(anomaly_ctx_t *ctx,
+                    const struct pkthdr *hdr,
+                    const u_char *data,
+                    anomaly_result_t *out) {
+    (void)ctx;
+    (void)hdr;
+    (void)data;
+    (void)out;
+    /* Default: no anomaly detection. Future implementations
+     * can inspect packets and populate the anomaly_result_t. */
+    if (out != NULL) {
+        out->type = ANOMALY_NONE;
+        out->severity = 0;
+        out->description[0] = '\0';
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /* Internal state                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -25,6 +69,7 @@ struct engine {
     engine_stats_t stats;         /**< Accumulated statistics        */
     output_format_t output_format;/**< Output format (TEXT/JSON)     */
     int show_sessions;            /**< Show per-protocol sessions    */
+    anomaly_ctx_t *anomaly_ctx;   /**< Anomaly detection context     */
 };
 
 /* Module-level proto_path_detail (shared by output_print_stats) */
@@ -59,6 +104,9 @@ engine_t *engine_create(int dlt, int flags, char *errbuf) {
 
     /* Zero out stats */
     memset(&eng->stats, 0, sizeof(eng->stats));
+
+    /* Initialize anomaly detection context */
+    eng->anomaly_ctx = anomaly_ctx_create();
 
     return eng;
 }
@@ -121,7 +169,16 @@ int engine_process_packet(engine_t *eng,
     eng->stats.end_time = hdr->ts;
 
     /* Cast away const — packet_process expects non-const per MMT-DPI API */
-    return packet_process(eng->mmt, (struct pkthdr *)hdr, (u_char *)data) ? 1 : 0;
+    int result = packet_process(eng->mmt, (struct pkthdr *)hdr, (u_char *)data) ? 1 : 0;
+
+    /* Run anomaly detection hook after packet processing */
+    if (eng->anomaly_ctx != NULL && result) {
+        anomaly_result_t anomaly;
+        anomaly_detect(eng->anomaly_ctx, hdr, data, &anomaly);
+        (void)anomaly; /* Future: log or store anomaly results */
+    }
+
+    return result;
 }
 
 void engine_live_callback(u_char *user,
@@ -178,6 +235,9 @@ void engine_destroy(engine_t *eng) {
         mmt_close_handler(eng->mmt);
         close_extraction();
     }
+
+    /* Destroy anomaly detection context */
+    anomaly_ctx_destroy(eng->anomaly_ctx);
 
     free(eng);
 }
