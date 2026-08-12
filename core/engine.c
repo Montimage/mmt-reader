@@ -111,6 +111,11 @@ engine_t *engine_create(int dlt, int flags, char *errbuf) {
     return eng;
 }
 
+mmt_handler_t *engine_get_mmt(const engine_t *eng) {
+    if (eng == NULL) return NULL;
+    return eng->mmt;
+}
+
 void engine_set_ip_classify(engine_t *eng, int on) {
     if (eng == NULL) return;
     if (on) {

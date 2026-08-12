@@ -51,6 +51,8 @@ typedef struct {
     int         verbose;        /**< 1 if --verbose / -v                */
     int         json;           /**< 1 if --json / MMTREADER_JSON=1     */
 
+    int         flows_seconds;  /**< capture duration + top-flow report (-F) */
+
     const char *config_path;    /**< 1 if --config flag was passed      */
 
 } cli_options_t;

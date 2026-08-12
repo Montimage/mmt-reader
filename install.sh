@@ -7,13 +7,17 @@
 #   2. MMT-DPI library      (builds from source if not present)
 #   3. mmtReader binary     (compiles and installs)
 #   4. Man page
-#   5. Shell completions (bash)
+#   5. Shell capabilities   (cap_net_raw + cap_net_admin — no sudo for live capture)
+#   6. Shell completions (bash)
 #
 # Usage:
 #   sudo ./install.sh                    # Install everything (default)
 #   sudo ./install.sh --mmt-dpi /path    # Use pre-built MMT-DPI at /path
 #   sudo ./install.sh --mmt-reader-only  # Skip MMT-DPI, only install mmtReader
 #   sudo ./install.sh --uninstall        # Remove everything
+#
+# After install, live capture works WITHOUT sudo:
+#   mmtReader capture eth0 -a -s
 #
 # Requirements:
 #   - Root (sudo) — needed for system-wide installation
@@ -50,13 +54,16 @@ MMT_DPI_PATH=""
 UNINSTALL=false
 DRY_RUN=false
 
+# Resolve script directory early (needed for non-root sudo runs)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ─── Parse args ───────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --mmt-dpi)         MMT_DPI_PATH="$2"; shift 2 ;;
         --mmt-reader-only) SKIP_MMT_DPI=true; shift ;;
         --uninstall)       UNINSTALL=true; shift ;;
-        --prefix)          PREFIX="$2"; BINDIR="${2}/bin"; MANDIR="${2}/share/man"; MAN1DIR="${MANDIR}/man1"; shift 2 ;;
+        --prefix)          PREFIX="$2"; BINDIR="${2}/bin"; MANDIR="${2}/share/man"; MAN1DIR="${MANDIR}/man1"; COMPLETIONS_DIR="${2}/share/bash-completion/completions"; shift 2 ;;
         --dry-run)         DRY_RUN=true; shift ;;
         *)                 error "Unknown option: $1"; echo "Usage: sudo $0 [--mmt-dpi /path] [--mmt-reader-only] [--uninstall] [--prefix /path]"; exit 1 ;;
     esac
@@ -117,10 +124,19 @@ get_package_manager() {
     fi
 }
 
+# ─── Check setcap availability ────────────────────────────
+HAS_SETCAP=false
+command -v setcap &>/dev/null && HAS_SETCAP=true
+
 # ─── Uninstall ────────────────────────────────────────────
 if $UNINSTALL; then
     step "Uninstalling MMT-Reader and MMT-DPI..."
-    needs_sudo
+    needs_sudo || true
+
+    # Remove capabilities from mmtReader binary
+    if [[ -f "${BINDIR}/mmtReader" ]]; then
+        run "setcap -r '${BINDIR}/mmtReader' 2>/dev/null || true"
+    fi
 
     # Remove mmtReader binary
     if [[ -f "${BINDIR}/mmtReader" ]]; then
@@ -244,6 +260,7 @@ else
         # Use local MMT-DPI source
         info "Found local MMT-DPI source at ${MMT_DPI_SRC}"
         MMT_DPI_BUILD_DIR="${MMT_DPI_SRC}/sdk"
+        MMT_DPI_SRC="${MMT_DPI_BUILD_DIR}/.."  # fix: re-resolve for sibling detection
         MMT_DPI_VERSION="auto"
         MMT_DPI_GIT_VERSION="$(cd "${MMT_DPI_SRC}" && git log --format="%h" -n 1 2>/dev/null || echo "local")"
 
@@ -293,11 +310,22 @@ fi
 # ─── Phase 3: Compile mmtReader ───────────────────────────
 step "Phase 3: Compiling mmtReader..."
 
+# cd to script dir — sudo may have changed cwd to /root
+if [[ ! -f "${SCRIPT_DIR}/mmtReader.c" ]]; then
+    error "mmtReader.c not found. Working directory is $(pwd)."
+    error "This script must be run from its own directory: cd ${SCRIPT_DIR} && sudo ./install.sh"
+    exit 1
+fi
+cd "${SCRIPT_DIR}"
+
 CC="gcc"
 CFLAGS="-g -O2"
 
-if ! ${CC} ${CFLAGS} -o mmtReader mmtReader.c \
-        -I"${MMT_DPI_INC}" \
+# All source files (matches Makefile)
+SRCS="mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c flows.c config.c"
+
+if ! ${CC} ${CFLAGS} -o mmtReader ${SRCS} \
+        -I"." -I"${MMT_DPI_INC}" -I"./utils" -I"./cli" \
         -L"${MMT_DPI_LIB}" \
         -lmmt_core -ldl -lpcap; then
     error "Compilation failed. Check your MMT-DPI installation."
@@ -337,20 +365,75 @@ else
     warn "completions/ directory not found — skipping shell completions."
 fi
 
-# ─── Phase 5: Verify ──────────────────────────────────────
-step "Phase 5: Verifying installation..."
+# ─── Phase 5: Set capabilities (live capture without sudo) ──
+if $HAS_SETCAP; then
+    step "Phase 5: Setting capabilities for live capture (no sudo needed)..."
+    # Grant CAP_NET_RAW + CAP_NET_ADMIN so mmtReader can open interfaces in promiscuous mode
+    # without requiring root. This enables: ./mmtReader capture eth0 -a
+    if $DRY_RUN; then
+        echo -e "${YELLOW}[DRY-RUN]${NC} setcap 'cap_net_raw,cap_net_admin=eip' '${BINDIR}/mmtReader'"
+        info "Capabilities would be set (dry-run)."
+    elif setcap 'cap_net_raw,cap_net_admin=eip' "${BINDIR}/mmtReader" 2>/dev/null; then
+        info "Capabilities set: cap_net_raw + cap_net_admin"
+    else
+        echo ""
+        echo -e "${YELLOW}╔══════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${YELLOW}║  MANUAL STEP REQUIRED: Set capabilities for live capture ║${NC}"
+        echo -e "${YELLOW}╚══════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "  ${YELLOW}setcap${NC} failed (likely because sudo didn't have a TTY)."
+        echo "  Live capture will still require ${RED}sudo${NC} until you run this manually:"
+        echo ""
+        echo -e "    ${GREEN}sudo setcap 'cap_net_raw,cap_net_admin=eip' ${BINDIR}/mmtReader${NC}"
+        echo ""
+        echo "  This lets mmtReader open interfaces in promiscuous mode"
+        echo "  without needing root — so you can run:"
+        echo ""
+        echo -e "    ${GREEN}mmtReader capture eth0 -a -s${NC}"
+        echo ""
+    fi
+else
+    echo ""
+    echo -e "${YELLOW}╔══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║  MANUAL STEP REQUIRED: Install setcap utility            ║${NC}"
+    echo -e "${YELLOW}╚══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  ${RED}setcap${NC} not found. Install it to enable live capture without sudo:"
+    echo ""
+    echo -e "    ${GREEN}sudo apt-get install libcap2-bin${NC}"
+    echo ""
+    echo "  Then set capabilities:"
+    echo ""
+    echo -e "    ${GREEN}sudo setcap 'cap_net_raw,cap_net_admin=eip' ${BINDIR}/mmtReader${NC}"
+    echo ""
+fi
 
-VERIFY_OUTPUT=$("${BINDIR}/mmtReader" -h 2>&1 || true)
-if echo "$VERIFY_OUTPUT" | grep -q "\-t"; then
+# ─── Phase 6: Verify ──────────────────────────────────────
+step "Phase 6: Verifying installation..."
+
+if "${BINDIR}/mmtReader" -h &>/dev/null; then
     info "✅ mmtReader is installed and working!"
     echo ""
     echo "  Quick start:"
     echo "    mmtReader -t your_file.pcap -a"
     echo ""
+
+    # Check if capabilities are already set
+    if getcap "${BINDIR}/mmtReader" &>/dev/null; then
+        echo "  Live capture (no sudo needed):"
+        echo "    mmtReader capture eth0 -a -s"
+        echo ""
+    else
+        echo "  ⚠️  Live capture still requires sudo. To remove that restriction, run manually:"
+        echo ""
+        echo -e "    ${GREEN}sudo setcap 'cap_net_raw,cap_net_admin=eip' ${BINDIR}/mmtReader${NC}"
+        echo ""
+    fi
+
     echo "  Uninstall:"
     echo "    sudo $0 --uninstall"
+    echo ""
 else
     error "Installation verification failed."
-    error "Output was: $VERIFY_OUTPUT"
     exit 1
 fi

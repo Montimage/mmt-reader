@@ -114,7 +114,7 @@ Input Statistics:
 | Protocol classification | Identify every protocol in the traffic |
 | Visual output | Mermaid-ready stats for embedding |
 | JSON output | Machine-readable for automation pipelines |
-| Live or offline | Analyze pcap files or monitor live interfaces |
+| Live or offline | Analyze pcap files or monitor live interfaces (Ethernet + WiFi) |
 | Session tracking | Per-protocol IPv4/IPv6 session counts |
 
 ## Quick Start
@@ -209,8 +209,11 @@ Protocol Statistics (with path):
 **Live monitoring:**
 
 ```bash
-# Agent triggers live capture:
+# Agent triggers live capture (Ethernet):
 sudo ./mmtReader capture eth0 -a -b 100
+
+# Or on a WiFi interface:
+sudo ./mmtReader capture wlP9s9 -a -s
 ```
 
 **Classification flags the Agent can toggle:**
@@ -233,6 +236,7 @@ sudo ./mmtReader capture eth0 -a -b 100
 | Protocol paths | `-a` flag | Manual filtering | Manual filtering |
 | Session tracking | `-s` flag | Manual | Manual |
 | Root required (live) | Yes | Yes | Yes |
+| WiFi support | Yes (auto-convert) | No | No |
 
 ## FAQ
 
@@ -246,7 +250,7 @@ Yes. It is a standard CLI tool. Run `./mmtReader analyze -t file.pcap -a` for pr
 
 **What traffic types are supported?**
 
-Ethernet (DLT_EN10MB) traffic only. Both IPv4 and IPv6 are tracked.
+Ethernet (DLT_EN10MB) and WiFi (802.11) traffic. WiFi frames are automatically converted to Ethernet format for DPI processing. Both IPv4 and IPv6 are tracked.
 
 ## Get Started
 
@@ -266,6 +270,8 @@ Live capture:
 
 ```bash
 sudo ./mmtReader capture eth0 -a
+# or WiFi:
+sudo ./mmtReader capture wlP9s9 -a
 ```
 
 [**User Guide ->**](docs/USER_GUIDE.md) · [**Architecture ->**](docs/ARCHITECTURE.md) · [**Development ->**](docs/DEVELOPMENT.md) · Apache 2.0 Licensed
@@ -287,6 +293,7 @@ MMT-Reader analyzes network traffic from pcap capture files or live network inte
 - **Dual input modes** — Read from pcap files (offline) or live network interfaces (online)
 - **Per-protocol statistics** — Packet count, data volume, and payload volume for every detected protocol
 - **Protocol path display** — Full DPI path hierarchy (e.g. `TCP.HTTP.Google`) with the `-a/--proto-path` flag
+- **Top-flow reporting** — Identify which hosts/ports consume the most bandwidth with `-F/--flows <seconds>`
 - **JSON output** — Machine-readable statistics with `--json`
 - **Three classification strategies** — IP address (`-x`), hostname (`-y`), and port (`-z`) fingerprinting, each independently toggleable
 - **Real-time monitoring** — Live capture with configurable buffer size (`-b`) and kernel/driver drop reporting
@@ -459,9 +466,10 @@ No root privileges required. Reads and replays traffic deterministically.
 | `-b, --buffer <MB>` | Buffer size in MB | Pcap handler buffer (default: 50) |
 | `-a, --proto-path` | None | Show per-protocol-path statistics |
 | `-s, --sessions` | None | Show per-protocol session counts |
+| `-F, --flows <seconds>` | Seconds | Capture for N seconds, then print top flows by volume |
 | `-j, --json` | None | JSON output format |
 
-Requires root/administrator privileges. Interface must be Ethernet (DLT_EN10MB).
+Requires root/administrator privileges (or `setcap` on Linux). Supports Ethernet and WiFi interfaces.
 
 #### Usage Examples
 
@@ -471,6 +479,9 @@ Requires root/administrator privileges. Interface must be Ethernet (DLT_EN10MB).
 
 # Live capture with custom 100 MB buffer
 sudo ./mmtReader capture eth0 -b 100 -a
+
+# Live capture on a WiFi interface
+sudo ./mmtReader capture wlP9s9 -a -s
 
 # Disable IP classification (faster, less accurate)
 ./mmtReader analyze -t capture.pcap -a -x 0

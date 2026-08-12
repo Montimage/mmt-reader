@@ -55,6 +55,8 @@ _mmtReader() {
         '--proto-path:Show per-protocol-path statistics'
         '-s:Show per-protocol session counts'
         '--sessions:Show per-protocol session counts'
+        '-F:Capture duration in seconds, report top flows by volume'
+        '--flows:Capture duration in seconds, report top flows by volume'
     )
 
     local -a arg_opts
@@ -65,6 +67,8 @@ _mmtReader() {
         '--interface=[INTERFACE:(ls /sys/class/net/)]'
         '-b:[BUFFER_SIZE:((1,10000))]'
         '--buffer=[BUFFER_SIZE:((1,10000))]'
+        '-F:[FLOWS_SECONDS:((5,10,30,60,120))]'
+        '--flows=[FLOWS_SECONDS:((5,10,30,60,120))]'
     )
 
     local -a all_opts

@@ -116,6 +116,11 @@ Show per-protocol-path statistics (e.g., TCP.HTTP.Google).
 .B \-s, \-\-sessions
 Show per-protocol session counts.
 .TP
+.B \-F, \-\-flows <seconds>
+Capture for the given number of seconds, then print the top flows by
+transferred volume. Useful to identify which hosts and ports consume the
+most bandwidth. Requires root/cap_net_raw on the interface.
+.TP
 .B \-j, \-\-json
 Output statistics in JSON format.
 .TP
@@ -160,6 +165,10 @@ MMP-only mode (disable all classification):
 Show session counts:
 .IP
 .B mmtReader analyze \-t capture.pcap \-s
+.TP
+Identify the top bandwidth consumers on eth0 over 30 seconds:
+.IP
+.B sudo mmtReader capture eth0 \-F 30
 .SH OUTPUT
 At the end of execution, mmtReader prints:
 .RS

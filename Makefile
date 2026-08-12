@@ -10,7 +10,7 @@ COMPLETIONS ?= $(PREFIX)/share/bash-completion/completions
 CC          ?= gcc
 CFLAGS      ?= -g -O2
 
-SRCS        = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c config.c
+SRCS        = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c flows.c config.c
 TARGET      = mmtReader
 
 .PHONY: all build install uninstall clean test completions

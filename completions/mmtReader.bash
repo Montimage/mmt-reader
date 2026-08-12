@@ -23,10 +23,10 @@ _mmtReader_completions() {
     local format_opts="-j --json -T --text"
 
     # Feature flags
-    local feature_opts="-a --proto-path -s --sessions"
+    local feature_opts="-a --proto-path -s --sessions -F --flows"
 
     # Options requiring arguments
-    local arg_opts="-t --trace -i --interface -b --buffer"
+    local arg_opts="-t --trace -i --interface -b --buffer -F --flows"
 
     if [[ ${cword} -eq 1 ]]; then
         # Top-level: suggest subcommands
@@ -74,6 +74,11 @@ _mmtReader_completions() {
         -b|--buffer)
             # Integer completion for buffer size
             COMPREPLY=( $(compgen -W "1 10 25 50 100 250 500 1000 5000" -- "${cur}") )
+            return
+            ;;
+        -F|--flows)
+            # Integer completion for capture duration in seconds
+            COMPREPLY=( $(compgen -W "5 10 30 60 120 300" -- "${cur}") )
             return
             ;;
         -x|--ip-classify|-y|--hostname-classify|-z|--port-classify)

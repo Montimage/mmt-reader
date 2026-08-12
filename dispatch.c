@@ -65,7 +65,10 @@ static int cmd_capture(const mmt_config_t *cfg) {
         return 1;
     }
 
-    if (pcap_loop(pcap, -1, &capture_callback, (u_char *)mmt) < 0) {
+    /* Set callback context: MMT handler + interface datalink type */
+    capture_set_context(mmt, pcap_datalink(pcap));
+
+    if (pcap_loop(pcap, -1, &capture_callback, NULL) < 0) {
         fprintf(stderr, "[error] pcap_loop failed: %s\n", pcap_geterr(pcap));
         pcap_close(pcap);
         return 1;
