@@ -24,6 +24,15 @@ Set the pcap handler buffer size in megabytes for live capture (default: 50).
 .B \-a, \-\-paths
 Show per-protocol-path statistics (e.g., TCP.HTTP.Google).
 .TP
+.B \-q, \-\-quiet
+Suppress progress output. Only final results are shown.
+.TP
+.B \-v, \-\-verbose
+Show verbose debug output to stderr (does not affect stdout output).
+.TP
+.B \-C, \-\-no-color
+Disable ANSI color output.
+.TP
 .B \-x <0|1>
 Enable (1) or disable (0) IP address-based classification (default: 1).
 .TP
@@ -35,6 +44,18 @@ Enable (1) or disable (0) port-based classification (default: 1).
 .TP
 .B \-h, \-\-help
 Print help and exit.
+.SH ENVIRONMENT VARIABLES
+.TP
+.B MMTREADER_JSON
+Set to B1R to force JSON output mode.
+.TP
+.B MMTREADER_NO_COLOR
+Set to B1R to disable color output (same as \fB\-\-no-color\fR).
+.TP
+.B MMTREADER_QUIET
+Set to B1\fR to enable quiet mode (same as \fB\-\-quiet\fR).
+.br
+Command-line flags override environment variables.
 .SH EXAMPLES
 Analyze a pcap file with protocol paths:
 .IP
@@ -69,10 +90,13 @@ Install from: https://bitbucket.org/montimage/mmt-dpi
 .SH EXIT STATUS
 .TP
 .B 0
-Successful analysis.
+Successful analysis or \fB\-\-help\fR requested.
 .TP
 .B 1
-Help was printed or an error occurred.
+Help was printed (legacy).
+.TP
+.B 2
+Usage or validation error.
 .SH AUTHOR
 Montimage <contact@montimage.com>
 .SH "REPORTING BUGS"

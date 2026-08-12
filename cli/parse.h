@@ -39,6 +39,9 @@ typedef struct {
     int         port_classify;    /**< port number classification (-z)    */
     int         show_help;      /**< 1 if --help was shown              */
     int         no_color;       /**< 1 if --no-color is set             */
+    int         quiet;          /**< 1 if --quiet / MMTREADER_QUIET=1   */
+    int         verbose;        /**< 1 if --verbose / -v                */
+    int         json;           /**< 1 if --json / MMTREADER_JSON=1     */
 } cli_options_t;
 
 /* ------------------------------------------------------------------ */
@@ -92,5 +95,12 @@ void parse_help(const char *prog_name);
  * @param prog_name Program name (argv[0])
  */
 void parse_error(const char *prog_name) __attribute__((noreturn));
+
+/**
+ * Print a validation error to stderr with usage hint.
+ * @param prog_name Program name (argv[0])
+ * @param msg       Error message (without trailing newline)
+ */
+void parse_validate_error(const char *prog_name, const char *msg);
 
 #endif /* PARSE_H */

@@ -32,12 +32,12 @@ static void signal_handler(int type) {
     /* Use async-signal-safe write() — printf is not signal-safe */
     ssize_t ret;
     const char msg[] = "\nINFO: reception of signal ";
-    ret = write(STDOUT_FILENO, msg, sizeof(msg) - 1);
+    ret = write(STDERR_FILENO, msg, sizeof(msg) - 1);
     (void)ret;
     char buf[16];
     int len = snprintf(buf, sizeof(buf), "%d\n", type);
     if (len > 0 && (size_t)len < sizeof(buf)) {
-        ret = write(STDOUT_FILENO, buf, (size_t)len);
+        ret = write(STDERR_FILENO, buf, (size_t)len);
         (void)ret;
     }
     got_signal = 1;
@@ -104,6 +104,13 @@ int main(int argc, char **argv) {
         return EXIT_SUCCESS;
     }
 
+    /* Verbose: print startup diagnostics to stderr */
+    if (opts.verbose) {
+        fprintf(stderr, "DEBUG: verbose mode enabled\n");
+        fprintf(stderr, "DEBUG: json output=%d, quiet=%d, no_color=%d\n",
+                opts.json, opts.quiet, opts.no_color);
+    }
+
     /* Banner (after --version/--help check) */
     version_banner(argv[0]);
 
@@ -140,12 +147,23 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
 
-        while ((data = pcap_next(pcap, &p_pkthdr)) != NULL && !got_signal) {
-            header.ts = p_pkthdr.ts;
-            header.caplen = p_pkthdr.caplen;
-            header.len = p_pkthdr.len;
-            if (!engine_process_packet(eng, &header, data)) {
-                fprintf(stderr, "Packet data extraction failure.\n");
+        {
+            int pkt_count = 0;
+            while ((data = pcap_next(pcap, &p_pkthdr)) != NULL && !got_signal) {
+                pkt_count++;
+                if (opts.verbose) {
+                    fprintf(stderr, "DEBUG: processing packet #%d (%d bytes)\n",
+                            pkt_count, (int)p_pkthdr.caplen);
+                }
+                header.ts = p_pkthdr.ts;
+                header.caplen = p_pkthdr.caplen;
+                header.len = p_pkthdr.len;
+                if (!engine_process_packet(eng, &header, data)) {
+                    fprintf(stderr, "Packet data extraction failure.\n");
+                }
+            }
+            if (opts.verbose) {
+                fprintf(stderr, "DEBUG: processed %d packets\n", pkt_count);
             }
         }
         pcap_close(pcap);
@@ -154,10 +172,17 @@ int main(int argc, char **argv) {
         /* ONLINE mode: live capture from interface */
         pcap_t *pcap;
 
-        if (opts.buffer_mb == 50) {
-            printf("INFO: Use default buffer size: 50 (MB)\n");
-        } else {
-            printf("INFO: Use buffer size: %d (MB)\n", opts.buffer_mb);
+        if (!opts.quiet) {
+            if (opts.buffer_mb == 50) {
+                fprintf(stderr, "INFO: Use default buffer size: 50 (MB)\n");
+            } else {
+                fprintf(stderr, "INFO: Use buffer size: %d (MB)\n", opts.buffer_mb);
+            }
+        }
+
+        if (opts.verbose) {
+            fprintf(stderr, "DEBUG: capturing on interface '%s'\n", opts.input);
+            fprintf(stderr, "DEBUG: buffer size %d MB\n", opts.buffer_mb);
         }
 
         pcap = init_pcap(opts.input, (uint16_t)opts.buffer_mb, 65535);
@@ -173,6 +198,11 @@ int main(int argc, char **argv) {
     } else {
         /* Should not reach here — parse_options validates input */
         parse_error(argv[0]);
+    }
+
+    /* Verbose: print summary diagnostics */
+    if (opts.verbose) {
+        fprintf(stderr, "DEBUG: processing complete\n");
     }
 
     /* Cleanup */
