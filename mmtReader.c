@@ -183,8 +183,7 @@ int main(int argc, char **argv) {
          * and timestamps are recorded and the anomaly hook runs */
         capture_set_processor(engine_process_packet_cb, eng);
 
-        /* Optional flow aggregation for top-talker reporting.
-         * The capture callback feeds Ethernet-converted frames. */
+        /* Optional top-talker reporting, built from the DPI's sessions */
         flows_t *flows = NULL;
         if (opts.flows_seconds > 0) {
             flows = flows_create();
@@ -194,7 +193,13 @@ int main(int argc, char **argv) {
                 engine_destroy(eng);
                 return EXIT_FAILURE;
             }
-            capture_set_flows(flows);
+            if (!flows_attach(flows, engine_get_mmt(eng))) {
+                fprintf(stderr, "[error] Failed to attach flow tracker to MMT\n");
+                flows_destroy(flows);
+                capture_close(pcap);
+                engine_destroy(eng);
+                return EXIT_FAILURE;
+            }
         }
 
         if (opts.flows_seconds > 0) {
@@ -214,7 +219,6 @@ int main(int argc, char **argv) {
                     break;
                 }
             }
-            capture_set_flows(NULL);
         } else {
             /* Continuous capture until signal */
             pcap_loop(pcap, -1, capture_callback, NULL);

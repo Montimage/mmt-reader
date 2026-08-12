@@ -11,7 +11,7 @@
  * byte arrays, so no interface and no privileges are needed.
  *
  * Compile: gcc -g -o test_capture_dispatch tests/test_capture_dispatch.c \
- *              capture.c flows.c \
+ *              capture.c \
  *              -I. -I/opt/mmt/dpi/include -I./utils -I./cli \
  *              -L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap
  */
@@ -19,7 +19,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "capture.h"
-#include "flows.h"
 
 /* Some older libpcap headers do not expose these datalink constants */
 #ifndef DLT_IEEE802_11
@@ -189,7 +188,6 @@ static void test_ethernet_single_dispatch(void) {
     stub_reset();
     /* No MMT handler is needed: the processor replaces packet_process() */
     capture_set_context(NULL, DLT_EN10MB);
-    capture_set_flows(NULL);
     capture_set_processor(stub_processor, &marker);
 
     capture_callback(NULL, &hdr, frame);
@@ -210,7 +208,6 @@ static void test_every_frame_dispatched(void) {
 
     stub_reset();
     capture_set_context(NULL, DLT_EN10MB);
-    capture_set_flows(NULL);
     capture_set_processor(stub_processor, NULL);
 
     for (i = 0; i < n; i++) {
@@ -231,7 +228,6 @@ static void test_timestamp_forwarded(void) {
 
     stub_reset();
     capture_set_context(NULL, DLT_EN10MB);
-    capture_set_flows(NULL);
     capture_set_processor(stub_processor, NULL);
 
     capture_callback(NULL, &hdr, frame);
@@ -239,38 +235,6 @@ static void test_timestamp_forwarded(void) {
     ASSERT_EQ(1, g_calls, "timestamped frame dispatched once");
     ASSERT_EQ((int)hdr.ts.tv_sec, (int)g_last_ts.tv_sec, "tv_sec forwarded to the processor");
     ASSERT_EQ((int)hdr.ts.tv_usec, (int)g_last_ts.tv_usec, "tv_usec forwarded to the processor");
-}
-
-/* Flow tracking must neither swallow nor duplicate a dispatch */
-static void test_dispatch_with_flows(void) {
-    u_char frame[FRAME_MAX];
-    int frame_len = build_eth_frame(frame, 0x03);
-    flows_t *flows = flows_create();
-    int i;
-    const int n = 5;
-
-    if (flows == NULL) {
-        printf("FAIL: flows_create returned NULL\n");
-        tests_run++;
-        tests_fail++;
-        return;
-    }
-
-    stub_reset();
-    capture_set_context(NULL, DLT_EN10MB);
-    capture_set_processor(stub_processor, NULL);
-    capture_set_flows(flows);
-
-    for (i = 0; i < n; i++) {
-        struct pcap_pkthdr hdr = make_hdr((unsigned int)frame_len,
-                                          (unsigned int)frame_len, 200 + i, 0);
-        capture_callback(NULL, &hdr, frame);
-    }
-
-    capture_set_flows(NULL);
-    flows_destroy(flows);
-
-    ASSERT_EQ(n, g_calls, "flow tracking does not change the dispatch count");
 }
 
 /* ------------------------------------------------------------------ */
@@ -287,7 +251,6 @@ static void test_wifi_converted_dispatch(void) {
 
     stub_reset();
     capture_set_context(NULL, DLT_IEEE802_11);
-    capture_set_flows(NULL);
     capture_set_processor(stub_processor, NULL);
 
     capture_callback(NULL, &hdr, frame);
@@ -312,7 +275,6 @@ static void test_wifi_raw_fallback_dispatch(void) {
 
     stub_reset();
     capture_set_context(NULL, DLT_IEEE802_11);
-    capture_set_flows(NULL);
     capture_set_processor(stub_processor, NULL);
 
     capture_callback(NULL, &hdr, frame);
@@ -336,7 +298,6 @@ static void test_processor_failure_does_not_stop_dispatch(void) {
 
     stub_reset();
     capture_set_context(NULL, DLT_EN10MB);
-    capture_set_flows(NULL);
     capture_set_processor(stub_processor, NULL);
     g_return_value = 0;   /* every frame reports an extraction failure */
 
@@ -379,7 +340,6 @@ static void test_fallback_when_processor_cleared(void) {
     }
 
     stub_reset();
-    capture_set_flows(NULL);
     capture_set_context(mmt, DLT_EN10MB);
     capture_set_processor(NULL, NULL);
 
@@ -405,7 +365,6 @@ int main(void) {
     test_ethernet_single_dispatch();
     test_every_frame_dispatched();
     test_timestamp_forwarded();
-    test_dispatch_with_flows();
     test_wifi_converted_dispatch();
     test_wifi_raw_fallback_dispatch();
     test_processor_failure_does_not_stop_dispatch();

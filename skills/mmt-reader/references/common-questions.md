@@ -2,7 +2,7 @@
 
 This reference lists common question patterns and the appropriate mmtReader command for each.
 
-**Before using any answer below:** `input_stats.data_volume`, `.bandwidth_bytes_per_sec`, and `.protocols` always read `0`. Wherever a volume, bandwidth, or protocol count is called for, derive it as described in `json-output.md` — total bytes from the `protocols[]` entry named `ethernet`, bandwidth from that ÷ `duration_seconds`, protocol count from `len(protocols[])`.
+**Before using any answer below:** `input_stats` carries the whole-capture totals — `data_volume`, `bandwidth_bytes_per_sec` and `protocols` (the count of distinct protocols) are reported directly, no derivation needed. See `json-output.md` for what each session field means.
 
 ## Protocol Questions
 
@@ -24,13 +24,13 @@ Answer: Sort `protocols[]` by `data_volume` descending.
 ```bash
 mmtReader analyze -t <file> --json -a -s
 ```
-Answer: Report `input_stats.packets` and `input_stats.duration_seconds` directly; derive total bytes and bandwidth.
+Answer: Report `input_stats.packets`, `.data_volume` and `.duration_seconds` directly.
 
 **"What's the average bandwidth?"**
 ```bash
 mmtReader analyze -t <file> --json -a -s
 ```
-Answer: Derive bandwidth (ethernet `data_volume` / `duration_seconds`) and render as KB/s or MB/s.
+Answer: Report `input_stats.bandwidth_bytes_per_sec`, rendered as KB/s or MB/s.
 
 ## Session Questions
 
@@ -38,13 +38,13 @@ Answer: Derive bandwidth (ethernet `data_volume` / `duration_seconds`) and rende
 ```bash
 mmtReader analyze -t <file> --json -a -s
 ```
-Answer: Report `input_stats.total_sessions`, `input_stats.ipv4_sessions`, `input_stats.ipv6_sessions`.
+Answer: Report `input_stats.total_sessions`, `.ipv4_sessions` and `.ipv6_sessions` — every session seen. Add `.active_sessions` when the user asks what was still open at the end.
 
 **"Break down sessions by protocol."**
 ```bash
 mmtReader analyze -t <file> --json -a -s
 ```
-Answer: Report per-protocol stats from `protocols[]`.
+Answer: Report per-protocol stats from `protocols[]`. Only the `ip`/`ipv6` entries carry a `sessions` count — the DPI books a session against the IP layer that owns it.
 
 ## Live Capture Questions
 

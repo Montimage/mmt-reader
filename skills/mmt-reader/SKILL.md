@@ -35,8 +35,8 @@ mmtReader analyze -t <pcap-file> --json -a -s
 |------|---------|
 | `-t` / `--trace` | Path to the pcap file (**required**) |
 | `--json` | Machine-readable JSON output — always use it, then parse |
-| `-a` / `--proto-path` | **Required for any protocol data.** Without it `protocols[]` comes back empty and `protocol_paths` is absent entirely — not just the hierarchy, everything |
-| `-s` / `--sessions` | Requests per-protocol session counts. Currently a no-op — keep it for forward compatibility |
+| `-a` / `--proto-path` | Adds the `protocol_paths[]` section — the full DPI hierarchy per path. Without it that key is absent; `protocols[]` is populated either way |
+| `-s` / `--sessions` | Adds the per-IP-version and active session counts to `input_stats`, and `sessions` to each `protocols[]` entry |
 
 For live traffic, **the live run** — `-q` is **not optional**:
 
@@ -66,7 +66,7 @@ The run succeeded when **all three** hold:
 
 - The process exited `0`
 - stdout parses as JSON
-- **Offline:** `input_stats.packets > 0`. **Live:** `len(protocols[]) > 0` — live captures always report `packets: 0` and `duration_seconds: 1.0`, so those two fields cannot be used as the bar or quoted in an answer.
+- `input_stats.packets > 0`, on offline and live runs alike — live captures are accounted through the same engine as `analyze`, so a `0` there means the interface really saw nothing.
 
 Failing the bar with exit `0` means the capture is empty or matched nothing — say so explicitly rather than reporting "no traffic detected" as a finding about the network.
 
@@ -77,16 +77,19 @@ Failing the bar with exit `0` means the capture is empty or matched nothing — 
 | Field | Use it to answer |
 |-------|------------------|
 | `input_stats.packets` | Total packets processed |
+| `input_stats.data_volume` | Total bytes on the wire |
 | `input_stats.duration_seconds` | Length of the capture window |
-| `input_stats.packets_per_sec` | Average packet rate |
-| `input_stats.total_sessions`, `.ipv4_sessions`, `.ipv6_sessions` | Session counts |
+| `input_stats.packets_per_sec`, `.bandwidth_bytes_per_sec` | Average packet and byte rates |
+| `input_stats.protocols` | Number of distinct protocols seen |
+| `input_stats.total_sessions`, `.ipv4_sessions`, `.ipv6_sessions` | Sessions seen over the whole capture |
+| `input_stats.active_sessions` | Sessions still open when the run ended (`-s` only) |
 | `protocols[]` | Per-protocol totals, sorted by packets descending — the usual source for "which service…" |
 | `protocol_paths[]` | Full DPI hierarchy per path — use for "show me the stack" questions |
 | `anomalies[]` | Detected anomalies; usually empty |
 
-### Three fields are broken — derive, never quote
+### Read the totals, do not recompute them
 
-`input_stats.data_volume`, `.bandwidth_bytes_per_sec`, and `.protocols` always report **`0`**, even on a busy capture. Derive instead: **total bytes** = the `protocols[]` entry named `ethernet` → its `data_volume` (the outermost layer, so it covers the whole capture); **bandwidth** = that ÷ `duration_seconds`; **protocol count** = `len(protocols[])`. See `references/json-output.md` for the verified field-by-field notes.
+Every `input_stats` figure comes from MMT-DPI's own accounting, so quote them directly — earlier releases zeroed `data_volume`, `bandwidth_bytes_per_sec` and `protocols`, and any workaround that derives them from the `ethernet` entry now just duplicates the same number. One distinction still matters: `total_sessions` counts every session seen, `active_sessions` only those still open at the end. See `references/json-output.md` for the field-by-field notes.
 
 Without `--json`, mmtReader prints the same four sections as text, plus PCAP drop counts for live captures. Prefer JSON.
 
@@ -98,19 +101,18 @@ Without `--json`, mmtReader prints the same four sections as text, plus PCAP dro
 mmtReader analyze -t smallFlows.pcap --json -a -s
 ```
 
-Real output, abridged — note the zeroed fields:
+Real output, abridged:
 
 ```json
-{ "input_stats": { "packets": 14261, "data_volume": 0, "duration_seconds": 298.0,
-                   "bandwidth_bytes_per_sec": 0.0, "total_sessions": 168, "protocols": 0 },
+{ "input_stats": { "packets": 14261, "data_volume": 9216531, "duration_seconds": 298.51,
+                   "bandwidth_bytes_per_sec": 30875.60, "total_sessions": 679,
+                   "active_sessions": 168, "protocols": 28 },
   "protocols": [ { "name": "ethernet", "packets": 14261, "data_volume": 9216531 },
                  { "name": "http",     "packets": 5287,  "data_volume": 5967094 },
                  { "name": "msn",      "packets": 3735,  "data_volume": 4259140 } ] }
 ```
 
-Derived: bytes = `ethernet.data_volume` = 9,216,531 (9.2 MB); bandwidth = 9216531 ÷ 298 ≈ 30.9 KB/s; protocol count = `len(protocols[])` = 28.
-
-**Answer:** "The capture holds 14,261 packets over 298 seconds (9.2 MB, ~30.9 KB/s average) across 168 sessions and 28 protocols. HTTP dominates at 5,287 packets (37%, 5.97 MB), followed by MSN at 3,735 packets (26%, 4.26 MB)."
+**Answer:** "The capture holds 14,261 packets over 299 seconds (9.2 MB, ~30.9 KB/s average) across 679 sessions and 28 protocols. HTTP dominates at 5,287 packets (37%, 5.97 MB), followed by MSN at 3,735 packets (26%, 4.26 MB)."
 
 For a chart, convert `protocols[]` into a Mermaid pie:
 
@@ -129,17 +131,17 @@ More question-to-command mappings live in `references/common-questions.md`.
 Every answer this skill produces must have all four parts. Check them before replying.
 
 1. **A direct answer sentence** naming the specific protocol, number, or interface asked about.
-2. **Supporting figures with units** — bytes rendered as KB/MB/GB, rates as KB/s or MB/s, shares as percentages of `input_stats.packets` or of the derived total bytes.
+2. **Supporting figures with units** — bytes rendered as KB/MB/GB, rates as KB/s or MB/s, shares as percentages of `input_stats.packets` or `input_stats.data_volume`.
 3. **The command that produced them**, so the user can re-run it.
-4. **Any limitation that changed the answer** — DPI misclassification, `sessions: 0`, unusable live packet counts — stated plainly, or omitted if none applied.
+4. **Any limitation that changed the answer** — DPI misclassification, `sessions: 0`, an empty `protocols[]` — stated plainly, or omitted if none applied.
 
 ```
-The capture holds 14,261 packets over 298 seconds (9.2 MB, ~30.9 KB/s
-average) across 168 sessions and 28 protocols. HTTP dominates at 5,287
+The capture holds 14,261 packets over 299 seconds (9.2 MB, ~30.9 KB/s
+average) across 679 sessions and 28 protocols. HTTP dominates at 5,287
 packets (37%, 5.97 MB), followed by MSN at 3,735 (26%, 4.26 MB).
 
 Produced by: mmtReader analyze -t smallFlows.pcap --json -a -s
-Note: per-protocol session counts read 0, so 168 is a capture-wide total.
+Note: only the `ip`/`ipv6` entries carry a session count, so 679 is the capture-wide total.
 ```
 
 Do **not** reply with raw JSON, an unlabelled number, or a claim the run does not support. If the checkable success bar failed, report the error instead of an answer.
@@ -165,7 +167,7 @@ Retry **once** at most; if it recurs, report the exact stderr rather than trying
 State these when they affect the answer:
 
 - Classification is DPI-based — encrypted or custom protocols may be unidentified or misattributed.
-- Sessions are counted per IPv4/IPv6, not per flow. Use `-F` for real per-flow data.
+- Session counts are per IPv4/IPv6, not per flow. Use `-F` for per-flow data: it lists the DPI's sessions, each with its application protocol, client and server endpoints, bytes and packets.
 - mmtReader classifies only; it does not reconstruct payloads.
 
 ## References

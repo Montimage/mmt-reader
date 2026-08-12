@@ -5,7 +5,7 @@
  * as byte arrays: valid data frames for each ToDS/FromDS combination,
  * plus malformed, truncated and non-convertible frames.
  *
- * Compile: gcc -g -o test_wifi tests/test_wifi.c capture.c flows.c \
+ * Compile: gcc -g -o test_wifi tests/test_wifi.c capture.c \
  *              -I. -I/opt/mmt/dpi/include -I./utils -I./cli \
  *              -L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap
  */

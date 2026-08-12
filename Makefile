@@ -66,17 +66,17 @@ test: build
 	gcc -g -o test_parse tests/test_parse.c cli/parse.c config.c -I. -I./utils && ./test_parse && rm -f test_parse
 	@echo ""
 	@echo "=== Test 7: WiFi conversion unit tests ==="
-	gcc -g -o test_wifi tests/test_wifi.c capture.c flows.c \
+	gcc -g -o test_wifi tests/test_wifi.c capture.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_wifi && rm -f test_wifi
 	@echo ""
-	@echo "=== Test 8: Flow aggregation unit tests ==="
+	@echo "=== Test 8: Flow reporting unit tests ==="
 	gcc -g -o test_flows tests/test_flows.c flows.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_flows && rm -f test_flows
 	@echo ""
 	@echo "=== Test 9: Capture dispatch unit tests ==="
-	gcc -g -o test_capture_dispatch tests/test_capture_dispatch.c capture.c flows.c \
+	gcc -g -o test_capture_dispatch tests/test_capture_dispatch.c capture.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_capture_dispatch && rm -f test_capture_dispatch
 	@echo ""

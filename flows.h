@@ -1,16 +1,16 @@
 /**
- * flows.h — Live flow aggregation (top talkers by volume)
+ * flows.h — Top talkers, reported from MMT-DPI sessions
  *
- * Tracks per-5-tuple byte/packet counters and reports the top flows
- * by transferred volume. Used with the --flows capture option to
- * identify which host (and port) consumes the most traffic.
+ * Ranks the sessions MMT-DPI tracks by transferred volume. Used with the
+ * --flows capture option to identify which host (and application)
+ * consumes the most traffic.
  */
 #ifndef FLOWS_H
 #define FLOWS_H
 
 #include <stdio.h>
 #include <stdint.h>
-#include <pcap.h>
+#include "mmt_core.h"
 
 /** Opaque flow-aggregation state. */
 typedef struct flows flows_t;
@@ -22,21 +22,25 @@ typedef struct flows flows_t;
 flows_t *flows_create(void);
 
 /**
+ * Attach the aggregator to an MMT-DPI handler.
+ *
+ * Registers the session attributes the report needs (client/server
+ * address and port, for IPv4 and IPv6) and a packet handler that records
+ * every session the DPI opens. Must be called before the first packet is
+ * processed; one aggregator attaches to one handler.
+ *
+ * @param f    Aggregator handle
+ * @param mmt  MMT handler to observe
+ * @return     1 on success, 0 if a registration failed
+ */
+int flows_attach(flows_t *f, mmt_handler_t *mmt);
+
+/**
  * Destroy a flow aggregator and release its resources.
+ * Detaches from the MMT handler it was attached to, if any.
  * @param f Aggregator handle (NULL is safe)
  */
 void flows_destroy(flows_t *f);
-
-/**
- * Feed one Ethernet frame to the aggregator.
- *
- * Parses IPv4/IPv6 (with optional VLAN tag) and TCP/UDP/ICMP/ICMPv6
- * headers, updating the matching 5-tuple bucket.
- * @param f     Aggregator handle
- * @param hdr   libpcap packet header
- * @param data  Raw frame bytes
- */
-void flows_packet(flows_t *f, const struct pcap_pkthdr *hdr, const u_char *data);
 
 /**
  * Print the top flows by bytes to the given stream.

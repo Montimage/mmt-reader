@@ -31,9 +31,6 @@ static int             g_datalink = DLT_EN10MB;
 /** Active pcap handle — used by capture_breakloop() to stop the loop */
 static pcap_t         *g_capture_pcap = NULL;
 
-/** Flow aggregator fed with Ethernet-converted frames (may be NULL) */
-static flows_t        *g_flows = NULL;
-
 /** Packet processor set by capture_set_processor() (may be NULL) */
 static capture_processor_fn g_processor = NULL;
 static void                *g_processor_ctx = NULL;
@@ -232,17 +229,13 @@ void capture_set_context(mmt_handler_t *mmt, int datalink) {
     g_datalink = datalink;
 }
 
-void capture_set_flows(flows_t *flows) {
-    g_flows = flows;
-}
-
 void capture_set_processor(capture_processor_fn fn, void *ctx) {
     g_processor = fn;
     g_processor_ctx = ctx;
 }
 
 /**
- * Feed a frame to the flow aggregator and to the packet processor.
+ * Feed a frame to the packet processor.
  *
  * The processor owns the packet accounting (counters, timestamps); when
  * none is registered the frame goes straight to MMT as before.
@@ -254,10 +247,6 @@ static void process_frame(const struct pcap_pkthdr *p_pkthdr, const u_char *data
     header.ts     = p_pkthdr->ts;
     header.caplen = p_pkthdr->caplen;
     header.len    = p_pkthdr->len;
-
-    if (g_flows != NULL) {
-        flows_packet(g_flows, p_pkthdr, data);
-    }
 
     if (g_processor != NULL) {
         ok = g_processor(g_processor_ctx, &header, data);
