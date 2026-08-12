@@ -105,6 +105,18 @@ static void test_parse_capture_with_interface(void) {
     ASSERT_STR_EQ("eth0", opts.input, "capture -i sets input");
 }
 
+static void test_parse_capture_positional_interface(void) {
+    char *argv[] = { "mmtReader", "capture", "eth0" };
+    int argc = 3;
+    cli_options_t opts;
+
+    parse_init(&opts);
+    int rc = parse_options(argc, argv, &opts);
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "capture eth0 (positional) returns OK");
+    ASSERT_EQ(2, opts.mode, "capture eth0 sets mode=2");
+    ASSERT_STR_EQ("eth0", opts.input, "capture eth0 sets input");
+}
+
 static void test_parse_quiet_flag(void) {
     char *argv[] = { "mmtReader", "analyze", "-t", "test.pcap", "-q" };
     int argc = 5;
@@ -182,6 +194,7 @@ int main(void) {
     test_parse_version_flag();
     test_parse_analyze_with_trace();
     test_parse_capture_with_interface();
+    test_parse_capture_positional_interface();
     test_parse_quiet_flag();
     test_parse_verbose_flag();
     test_parse_json_flag();

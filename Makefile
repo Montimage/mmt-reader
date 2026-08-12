@@ -9,7 +9,7 @@ MAN1DIR     ?= $(MANDIR)/man1
 CC          ?= gcc
 CFLAGS      ?= -g -O2
 
-SRCS        = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c
+SRCS        = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c
 TARGET      = mmtReader
 
 .PHONY: all build install uninstall clean test

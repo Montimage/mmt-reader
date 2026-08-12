@@ -21,6 +21,7 @@
 #include "utils/version.h"
 #include "utils/colors.h"
 #include "cli/parse.h"
+#include "capture.h"
 
 static volatile sig_atomic_t got_signal = 0;
 
@@ -41,36 +42,6 @@ static void signal_handler(int type) {
         (void)ret;
     }
     got_signal = 1;
-}
-
-/* ------------------------------------------------------------------ */
-/* PCAP helpers                                                        */
-/* ------------------------------------------------------------------ */
-
-static pcap_t *init_pcap(const char *iname, uint16_t buffer_size, uint16_t snaplen) {
-    pcap_t *my_pcap;
-    char errbuf[1024];
-
-    my_pcap = pcap_create(iname, errbuf);
-    if (my_pcap == NULL) {
-        fprintf(stderr, "[error] Couldn't open device %s\n", errbuf);
-        return NULL;
-    }
-
-    pcap_set_snaplen(my_pcap, snaplen);
-    pcap_set_promisc(my_pcap, 1);
-    pcap_set_timeout(my_pcap, 0);
-    pcap_set_buffer_size(my_pcap, buffer_size * 1000 * 1000);
-    pcap_activate(my_pcap);
-
-    if (pcap_datalink(my_pcap) != DLT_EN10MB) {
-        fprintf(stderr, "[error] %s is not an Ethernet (Make sure you run with administrator permission!)\n",
-                iname);
-        pcap_close(my_pcap);
-        return NULL;
-    }
-
-    return my_pcap;
 }
 
 /* ------------------------------------------------------------------ */
@@ -118,10 +89,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "DEBUG: json output=%d, quiet=%d, no_color=%d\n",
                 opts.json, opts.quiet, opts.no_color);
     }
-
-    /* Banner (after --version/--help check) */
-    version_banner(argv[0]);
-
 
     /* Create engine */
     char mmt_errbuf[1024];
@@ -198,7 +165,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "DEBUG: buffer size %d MB\n", opts.buffer_mb);
         }
 
-        pcap = init_pcap(opts.input, (uint16_t)opts.buffer_mb, 65535);
+        pcap = capture_init(opts.input, (uint16_t)opts.buffer_mb, 65535);
         if (!pcap) {
             fprintf(stderr, "[error] Creating pcap handle failed\n");
             engine_destroy(eng);
@@ -207,6 +174,12 @@ int main(int argc, char **argv) {
 
         (void)pcap_loop(pcap, -1, engine_live_callback, (u_char *)eng);
         pcap_close(pcap);
+
+        /* Print final statistics before exit */
+        if (!opts.quiet) {
+            fprintf(stderr, "\nINFO: Capture stopped by user signal\n");
+            engine_print_stats(eng);
+        }
 
     } else {
         /* Should not reach here — parse_options validates input */
