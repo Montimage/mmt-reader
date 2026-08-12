@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <getopt.h>
+#include <time.h>
 #include <pcap.h>
 #ifndef __FAVOR_BSD
 # define __FAVOR_BSD
@@ -22,6 +23,7 @@
 #include "utils/colors.h"
 #include "cli/parse.h"
 #include "capture.h"
+#include "flows.h"
 
 static volatile sig_atomic_t got_signal = 0;
 
@@ -42,6 +44,8 @@ static void signal_handler(int type) {
         (void)ret;
     }
     got_signal = 1;
+    /* Break out of pcap_loop (async-signal-safe flag set) */
+    capture_breakloop();
 }
 
 /* ------------------------------------------------------------------ */
@@ -172,13 +176,57 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
 
-        (void)pcap_loop(pcap, -1, engine_live_callback, (u_char *)eng);
-        pcap_close(pcap);
+        /* Set callback context: MMT handler + interface datalink type */
+        capture_set_context(engine_get_mmt(eng), pcap_datalink(pcap));
+
+        /* Optional flow aggregation for top-talker reporting.
+         * The capture callback feeds Ethernet-converted frames. */
+        flows_t *flows = NULL;
+        if (opts.flows_seconds > 0) {
+            flows = flows_create();
+            if (flows == NULL) {
+                fprintf(stderr, "[error] Failed to allocate flow tracker\n");
+                capture_close(pcap);
+                engine_destroy(eng);
+                return EXIT_FAILURE;
+            }
+            capture_set_flows(flows);
+        }
+
+        if (opts.flows_seconds > 0) {
+            /* Time-limited capture with flow tracking */
+            time_t deadline = time(NULL) + opts.flows_seconds;
+            while (!got_signal && time(NULL) < deadline) {
+                struct pcap_pkthdr *hdr;
+                const u_char *data;
+                int rc = pcap_next_ex(pcap, &hdr, &data);
+                if (rc == 1) {
+                    capture_callback(NULL, hdr, data);
+                } else if (rc < 0) {
+                    if (!got_signal) {
+                        fprintf(stderr, "[error] Capture failed: %s\n",
+                                pcap_geterr(pcap));
+                    }
+                    break;
+                }
+            }
+            capture_set_flows(NULL);
+        } else {
+            /* Continuous capture until signal */
+            pcap_loop(pcap, -1, capture_callback, NULL);
+        }
+        capture_close(pcap);
 
         /* Print final statistics before exit */
         if (!opts.quiet) {
-            fprintf(stderr, "\nINFO: Capture stopped by user signal\n");
+            fprintf(stderr, "\nINFO: Capture stopped\n");
             engine_print_stats(eng);
+        }
+
+        /* Print top flows after the protocol stats */
+        if (flows != NULL) {
+            flows_print_top(flows, stdout, 15);
+            flows_destroy(flows);
         }
 
     } else {

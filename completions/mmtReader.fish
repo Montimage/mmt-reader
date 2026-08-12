@@ -22,6 +22,7 @@ complete -c mmtReader -n '__fish_use_subcommand' -x -s T -l text -d 'Set text ou
 
 complete -c mmtReader -n '__fish_use_subcommand' -x -s a -l proto-path -d 'Show per-protocol-path statistics'
 complete -c mmtReader -n '__fish_use_subcommand' -x -s s -l sessions -d 'Show per-protocol session counts'
+complete -c mmtReader -n '__fish_seen_subcommand_from capture' -x -s F -l flows -d 'Capture duration in seconds, report top flows by volume' -r -f -a '5 10 30 60 120 300'
 
 # Subcommand: analyze
 complete -c mmtReader -n '__fish_seen_subcommand_from analyze' -x -s t -l trace -d 'Trace file to analyze (required)' -f -a '(__fish_complete_suffix pcap)'

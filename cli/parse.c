@@ -88,6 +88,7 @@ static const char *capture_help =
 "  -b, --buffer <MB>        PCAP buffer size in MB (default: 50)\n"
 "  -a, --proto-path         Show per-protocol-path statistics\n"
 "  -s, --sessions           Show per-protocol session counts\n"
+"  -F, --flows <seconds>    Capture for <seconds>, then report top flows by volume\n"
 "  -j, --json               Output statistics in JSON format\n"
 "  -T, --text               Explicitly set text output format (default)\n"
 
@@ -156,6 +157,7 @@ static const struct option long_options[] = {
     { "buffer",          required_argument, NULL, 'b' },
     { "proto-path",      no_argument,       NULL, 'a' },
     { "sessions",        no_argument,       NULL, 's' },
+    { "flows",           required_argument, NULL, 'F' },
     { "json",            no_argument,       NULL, 'j' },
     { "text",            no_argument,       NULL, 'T' },
     { "quiet",           no_argument,       NULL, 'q' },
@@ -190,6 +192,7 @@ void parse_init(cli_options_t *opts) {
     opts->quiet           = 0;
     opts->verbose         = 0;
     opts->json            = 0;
+    opts->flows_seconds   = 0;
     opts->config_path     = NULL;
 
     /* Environment variables (lowest priority — CLI flags override these) */
@@ -263,7 +266,7 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
     /* Reset getopt state after argv shift */
     optind = 1;
 
-    while ((opt = getopt_long(argc, argv, "t:i:b:haVsqjTCx:y:z:c:v",
+    while ((opt = getopt_long(argc, argv, "t:i:b:haVsqjTCx:y:z:c:vF:",
                               long_options, NULL)) != EOF) {
         switch (opt) {
         case 't':
@@ -315,6 +318,16 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
         case 's':
             opts->show_sessions = 1;
             break;
+
+        case 'F': {
+            long val = strtol(optarg, NULL, 10);
+            if (val <= 0) {
+                fprintf(stderr, "Error: --flows must be a positive number of seconds\n");
+                parse_error(prog_name);
+            }
+            opts->flows_seconds = (int)val;
+            break;
+        }
 
         case 'j':
         case 'J':
@@ -411,6 +424,13 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
         opts->input = argv[optind];
         opts->mode  = 2; /* LIVE_INTERFACE */
         has_input   = 1;
+    }
+
+    /* --flows drives a timed live capture, so it only applies to the
+     * 'capture' subcommand — reject it on the offline trace-file path */
+    if (opts->mode == 1 && opts->flows_seconds > 0) {
+        fprintf(stderr, "Error: --flows is only supported by the 'capture' subcommand (live interfaces).\n");
+        parse_error(prog_name);
     }
 
     /* Validate: input is required for both subcommands */

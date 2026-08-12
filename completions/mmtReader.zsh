@@ -67,8 +67,20 @@ _mmtReader() {
         '--buffer=[BUFFER_SIZE:((1,10000))]'
     )
 
+    # Offered only after the 'capture' subcommand — analyze rejects --flows
+    local -a capture_opts
+    capture_opts=(
+        '-F:Capture duration in seconds, report top flows by volume'
+        '--flows:Capture duration in seconds, report top flows by volume'
+        '-F:[FLOWS_SECONDS:((5,10,30,60,120))]'
+        '--flows=[FLOWS_SECONDS:((5,10,30,60,120))]'
+    )
+
     local -a all_opts
     all_opts=("${global_opts[@]}" "${classify_opts[@]}" "${format_opts[@]}" "${feature_opts[@]}" "${arg_opts[@]}")
+    if [[ "${words[2]}" == "capture" ]]; then
+        all_opts+=("${capture_opts[@]}")
+    fi
 
     local curcontext="$curcontext"
     local state state_descr line

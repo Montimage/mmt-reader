@@ -2,3 +2,8 @@
 .o
 .so
 mmtReader
+# ASM skill build artifacts
+*.skill
+dist/
+.asm-improver/
+*.bak

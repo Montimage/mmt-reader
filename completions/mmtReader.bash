@@ -28,6 +28,9 @@ _mmtReader_completions() {
     # Options requiring arguments
     local arg_opts="-t --trace -i --interface -b --buffer"
 
+    # Flags offered only after the 'capture' subcommand
+    local capture_opts="-F --flows"
+
     if [[ ${cword} -eq 1 ]]; then
         # Top-level: suggest subcommands
         COMPREPLY=( $(compgen -W "${subcommands}" -- "${cur}") )
@@ -35,23 +38,24 @@ _mmtReader_completions() {
     fi
 
     # Determine subcommand
-    local subcmd=""
+    local subcmd="${words[1]}"
+
+    # Options available with any subcommand, plus the capture-only ones
+    local all_opts="${global_opts} ${classify_opts} ${format_opts} ${feature_opts} ${arg_opts}"
+    if [[ "${subcmd}" == "capture" ]]; then
+        all_opts="${all_opts} ${capture_opts}"
+    fi
+
     if [[ ${cword} -eq 2 ]]; then
         # Second word: subcommand or option
         if [[ "${prev}" == "--" ]]; then
             # -- followed by long option
-            COMPREPLY=( $(compgen -W "${global_opts} ${classify_opts} ${format_opts} ${feature_opts} ${arg_opts}" -- "${cur}") )
+            COMPREPLY=( $(compgen -W "${all_opts}" -- "${cur}") )
             return
         fi
-        COMPREPLY=( $(compgen -W "${subcommands} ${global_opts} ${classify_opts} ${format_opts} ${feature_opts} ${arg_opts}" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "${subcommands} ${all_opts}" -- "${cur}") )
         return
     fi
-
-    # We have a subcommand, parse remaining options
-    subcmd="${words[1]}"
-
-    # All options available with any subcommand
-    local all_opts="${global_opts} ${classify_opts} ${format_opts} ${feature_opts} ${arg_opts}"
 
     case "${prev}" in
         -t|--trace)
@@ -74,6 +78,11 @@ _mmtReader_completions() {
         -b|--buffer)
             # Integer completion for buffer size
             COMPREPLY=( $(compgen -W "1 10 25 50 100 250 500 1000 5000" -- "${cur}") )
+            return
+            ;;
+        -F|--flows)
+            # Integer completion for capture duration in seconds
+            COMPREPLY=( $(compgen -W "5 10 30 60 120 300" -- "${cur}") )
             return
             ;;
         -x|--ip-classify|-y|--hostname-classify|-z|--port-classify)

@@ -58,6 +58,14 @@ typedef struct engine engine_t;
 engine_t *engine_create(int dlt, int flags, char *errbuf);
 
 /**
+ * Get the underlying MMT handler from an engine.
+ * Used internally by capture callbacks.
+ * @param eng  Engine handle
+ * @return     MMT handler pointer
+ */
+mmt_handler_t *engine_get_mmt(const engine_t *eng);
+
+/**
  * Destroy the engine and release all internal resources.
  * @param eng Engine handle (NULL is safe)
  */
