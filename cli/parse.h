@@ -42,6 +42,11 @@ typedef struct {
     int         no_color;       /**< 1 if --no-color is set             */
     int         output_format;  /**< 0=text (default), 1=json           */
     int         show_sessions;  /**< 1 to show per-session breakdown (-s) */
+
+    int         quiet;          /**< 1 if --quiet / MMTREADER_QUIET=1   */
+    int         verbose;        /**< 1 if --verbose / -v                */
+    int         json;           /**< 1 if --json / MMTREADER_JSON=1     */
+
 } cli_options_t;
 
 /* ------------------------------------------------------------------ */
@@ -95,5 +100,12 @@ void parse_help(const char *prog_name);
  * @param prog_name Program name (argv[0])
  */
 void parse_error(const char *prog_name) __attribute__((noreturn));
+
+/**
+ * Print a validation error to stderr with usage hint.
+ * @param prog_name Program name (argv[0])
+ * @param msg       Error message (without trailing newline)
+ */
+void parse_validate_error(const char *prog_name, const char *msg);
 
 #endif /* PARSE_H */
