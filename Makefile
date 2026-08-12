@@ -43,4 +43,4 @@ clean:
 	rm -f $(TARGET)
 
 test: build
-	./$(TARGET) -t smallFlows.pcap -a | tail -15
+	./$(TARGET) analyze -t smallFlows.pcap -a | tail -15
