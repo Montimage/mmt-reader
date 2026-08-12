@@ -24,7 +24,6 @@ Analyze a PCAP trace file for protocol identification.
 .B capture
 Capture and analyze live network traffic from a network interface.
 .RE
-.RE
 
 .SH GLOBAL OPTIONS
 These options are available with any subcommand.
@@ -49,6 +48,15 @@ Enable (1) or disable (0) hostname-based classification (default: 1).
 .TP
 .B \-z <0|1>
 Enable (1) or disable (0) port-based classification (default: 1).
+.TP
+.B \-j, \-\-json
+Output statistics in JSON format.
+.TP
+.B \-T, \-\-text
+Explicitly set text output format (default).
+.TP
+.B \-C, \-\-no-color
+Disable ANSI color output.
 .SH COMMANDS
 .SS "mmtReader analyze"
 Analyze a PCAP trace file for protocol identification.
@@ -64,9 +72,6 @@ Options specific to
 .TP
 .B \-t, \-\-trace <file>
 Analyze a pcap capture file (offline mode). No root privileges required.
-.TP
-.B \-i, \-\-interface <iface>
-Capture traffic from a live network interface (online mode). Requires root privileges.
 .TP
 .B \-b, \-\-buffer <MB>
 Set the pcap handler buffer size in megabytes for live capture (default: 50).
