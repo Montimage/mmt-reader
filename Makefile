@@ -65,15 +65,15 @@ test: build
 	@echo "=== Test 6: Parse unit tests ==="
 	gcc -g -o test_parse tests/test_parse.c cli/parse.c config.c -I. -I./utils && ./test_parse && rm -f test_parse
 	@echo ""
-	@echo "=== Test 7: Completions exist ==="
+	@echo "=== Test 7: WiFi conversion unit tests ==="
+	gcc -g -o test_wifi tests/test_wifi.c capture.c flows.c \
+		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
+		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_wifi && rm -f test_wifi
+	@echo ""
+	@echo "=== Test 8: Completions exist ==="
 	@test -f completions/mmtReader.bash && echo "Bash completion OK" || echo "Bash completion missing"
 	@test -f completions/mmtReader.zsh && echo "Zsh completion OK" || echo "Zsh completion missing"
 	@test -f completions/mmtReader.fish && echo "Fish completion OK" || echo "Fish completion missing"
-	@echo ""
-	@echo "=== Test 5: Completions exist ==="
-	@test -f completions/mmtReader.bash && echo "Bash completion ✓" || echo "Bash completion missing ✗"
-	@test -f completions/mmtReader.zsh && echo "Zsh completion ✓" || echo "Zsh completion missing ✗"
-	@test -f completions/mmtReader.fish && echo "Fish completion ✓" || echo "Fish completion missing ✗"
 	@echo ""
 	@echo "All tests passed!"
 

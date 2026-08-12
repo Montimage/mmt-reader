@@ -55,6 +55,28 @@ void capture_set_context(mmt_handler_t *mmt, int datalink);
 void capture_set_flows(flows_t *flows);
 
 /**
+ * Convert an IEEE 802.11 data frame to an Ethernet frame.
+ *
+ * Accepts only data frames (type 2) that are unencrypted, carry a
+ * payload and are LLC/SNAP encapsulated. The MAC header length is
+ * derived from the ToDS/FromDS pair and the QoS/HT Control fields, and
+ * DA/SA are taken from the address fields that match that pair. The
+ * EtherType is read from the SNAP header, which is then skipped.
+ *
+ * Every read is bounded by caplen and every write by out_cap, so the
+ * frame may be attacker-controlled.
+ *
+ * @param data     Pointer to the 802.11 frame (no radiotap header)
+ * @param caplen   Captured length of the frame in bytes
+ * @param out_buf  Output buffer receiving the Ethernet frame
+ * @param out_cap  Capacity of out_buf in bytes
+ * @param out_len  Set to the converted length on success
+ * @return         1 on success, 0 when the frame cannot be converted
+ */
+int capture_wifi_to_ethernet(const u_char *data, int caplen,
+                             u_char *out_buf, int out_cap, int *out_len);
+
+/**
  * Live capture callback — passes packets to MMT.
  * Handles both Ethernet and WiFi (802.11) frame conversion.
  * @param user    u_char pointer (reserved, not used)
