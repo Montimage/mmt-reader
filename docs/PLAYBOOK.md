@@ -1,7 +1,7 @@
 # MMT-Reader AI Agent Playbook
 
-> **5 proven use cases** with completed experiments — prompts, expected output, and explanations.
-> Built for **normal users** (analysts, developers) and **admin operators** (network engineers, SREs).
+> **6 proven use cases** with completed experiments — prompts, expected output, and explanations.
+> Built for **normal users** (analysts, developers), **admin operators** (network engineers, SREs), and **AI agents** (Claude, Cursor, Copilot, etc.).
 
 ---
 
@@ -14,6 +14,7 @@
 | 3 | **Automated JSON Pipeline** | Dev / SRE | ⭐⭐⭐ |
 | 4 | **Live Traffic Monitoring** | Admin / SRE | ⭐⭐⭐ |
 | 5 | **Session & Bandwidth Audit** | Admin / Manager | ⭐⭐ |
+| 6 | **AI Agent-Assisted Analysis** | Any user + AI Agent | ⭐ |
 
 ---
 
@@ -604,6 +605,186 @@ Classification: IP + Hostname + Port (full)
 
 ---
 
+## Use Case 6 — AI Agent-Assisted Analysis
+
+**Goal:** A user opens any AI agent (Claude Code, Cursor, GitHub Copilot, etc.) and asks a natural-language question about their network traffic. The AI agent runs mmt-reader as a tool, interprets the output, and delivers a clear answer — no CLI expertise needed.
+
+### How It Works
+
+```
+User ──asks question──> AI Agent ──runs mmt-reader──> mmtReader output ──interprets──> AI Agent ──answers──> User
+```
+
+The AI agent treats `mmtReader` as a **CLI tool in its toolbox**, just like it would use `grep`, `jq`, or `curl`. The user never touches the command line.
+
+### Example 1: "What's using all my bandwidth?"
+
+**User prompt to AI agent:**
+
+> I have a capture file at `smallFlows.pcap`. Can you tell me what's consuming the most bandwidth?
+
+**What the AI agent does behind the scenes:**
+
+```bash
+# Step 1: Run mmt-reader with JSON output for structured data
+./mmtReader analyze -t smallFlows.pcap --json -q -a
+```
+
+**The AI agent receives JSON and synthesizes an answer:**
+
+> Here's what's consuming your bandwidth:
+>
+> | Rank | Application | Packets | Payload | % of Total |
+> |------|-------------|---------|---------|------------|
+> | 1 | **HTTP** | 5,287 | 5.68 MB | 37% |
+> | 2 | **MSN Messenger** | 3,735 | 4.06 MB | 26% |
+> | 3 | **SSL/TLS** | 3,090 | 2.60 MB | 21% |
+> | 4 | **Salesforce** | 1,422 | 1.35 MB | 9% |
+> | 5 | **Skype** | 773 | 424 KB | 3% |
+>
+> **Summary:** HTTP traffic dominates at 5.7 MB (mostly web browsing). MSN Messenger is surprisingly high at 4 MB — this looks like legacy or test traffic. SSL/TLS at 2.6 MB suggests encrypted traffic that can't be inspected further without keys.
+
+### Example 2: "Are there any suspicious protocols?"
+
+**User prompt to AI agent:**
+
+> I captured traffic on my office network. Are there any unusual or suspicious protocols in `capture.pcap`?
+
+**What the AI agent does:**
+
+```bash
+# Step 1: Full analysis with protocol paths
+./mmtReader analyze -t capture.pcap -a -q
+
+# Step 2: Look for unknown/unclassified traffic
+./mmtReader analyze -t capture.pcap --json -q -a | jq '.protocol_paths[] | select(.path | contains("unknown"))'
+```
+
+**The AI agent responds:**
+
+> I found a few things worth noting:
+>
+> 1. **20 packets classified as "unknown"** — 4,174 bytes of unclassified traffic. This could be tunneling, a novel protocol, or simply DPI gaps.
+> 2. **NetBIOS traffic detected** (17 packets, 1,866 bytes) — unusual in modern networks unless you have Windows file sharing.
+> 3. **SNMP traffic** (16 packets, 1,952 bytes) — check if your network monitoring is expected.
+> 4. **SSDP traffic** (42 packets, 7,229 bytes) — common on home/office networks for device discovery.
+>
+> The "unknown" packets are the most suspicious — I'd recommend inspecting those flows in Wireshark for deep inspection.
+
+### Example 3: "How many sessions were in this capture?"
+
+**User prompt to AI agent:**
+
+> How many network sessions are in `smallFlows.pcap` and what's the average session rate?
+
+**What the AI agent does:**
+
+```bash
+./mmtReader analyze -t smallFlows.pcap -s -q
+```
+
+**The AI agent responds:**
+
+> This capture has:
+> - **168 total sessions** (all IPv4, 0 IPv6)
+> - **Duration:** 298 seconds (~5 minutes)
+> - **Average session rate:** 0.56 sessions/second (~1 new session every 2 seconds)
+> - **Packet rate:** 47.86 packets/second
+>
+> This is light traffic — typical of a small office or personal network.
+
+### Example 4: "Compare two captures"
+
+**User prompt to AI agent:**
+
+> I have two captures: `before.pcap` and `after.pcap`. Did something change in the traffic?
+
+**What the AI agent does:**
+
+```bash
+# Analyze both captures and compare
+./mmtReader analyze -t before.pcap --json -q -a > before.json
+./mmtReader analyze -t after.pcap --json -q -a > after.json
+
+# Diff the protocol lists
+jq '.protocols | sort_by(-.packets) | .[0:10]' before.json after.json
+```
+
+**The AI agent responds:**
+
+> Comparing `before.pcap` vs `after.pcap`:
+>
+> **Before:** HTTP (5,287 pkts), MSN (3,735 pkts), SSL (3,090 pkts)
+> **After:** HTTP (8,412 pkts), SSL (5,201 pkts), DNS (342 pkts)
+>
+> **Key changes:**
+> 1. **HTTP traffic increased 59%** — likely more web browsing or a web-based app started
+> 2. **SSL more than doubled** — encrypted traffic grew significantly (could be HTTPS migration)
+> 3. **MSN disappeared** — the legacy app is no longer active
+> 4. **DNS traffic surged** — 342 packets vs 87, suggesting more name resolution (new services or misconfiguration)
+
+### Prompt Patterns for AI Agents
+
+Here are reusable prompt patterns users can give to any AI agent:
+
+| Pattern | Example Prompt |
+|---------|----------------|
+| **Top consumers** | "What are the top 5 bandwidth consumers in `capture.pcap`?" |
+| **Protocol inventory** | "List all protocols detected in `capture.pcap`" |
+| **Anomaly detection** | "Are there any unknown or suspicious protocols in this capture?" |
+| **Session analysis** | "How many sessions and what's the traffic rate?" |
+| **Comparison** | "Compare traffic between `before.pcap` and `after.pcap`" |
+| **Application-specific** | "How much HTTP traffic is in this capture?" |
+| **Quick summary** | "Give me a one-paragraph summary of this capture" |
+
+### AI Agent Tool Setup
+
+For the best experience, add mmt-reader to your AI agent's tool configuration:
+
+**Claude Code (`CLAUDE.md`):**
+
+```markdown
+## Available Tools
+
+You can run mmt-reader to analyze network captures:
+- `./mmtReader analyze -t <file> --json -q -a` — Full analysis in JSON
+- `./mmtReader analyze -t <file> -q` — Human-readable summary
+- `./mmtReader analyze -t <file> -s -q` — Include session counts
+
+Always use `--json` when you need to parse or compare data programmatically.
+```
+
+**Cursor / VS Code (`.cursorrules` or similar):**
+
+```
+When the user asks about network traffic or pcap files, use mmt-reader:
+1. Run `./mmtReader analyze -t <file> --json -q -a` for structured data
+2. Interpret the results and present findings in tables or bullet points
+3. Highlight anomalies, top consumers, and actionable insights
+```
+
+### Why This Works Well
+
+| Factor | Explanation |
+|--------|-------------|
+| **No CLI expertise needed** | User speaks naturally; AI handles the commands |
+| **Structured output** | `--json` gives the AI parseable data for accurate analysis |
+| **Context-rich answers** | AI can combine mmt-reader output with the user's question for tailored insights |
+| **Repeatable** | Same question → same command → same reliable results |
+| **Extensible** | AI can chain multiple mmt-reader calls for complex comparisons |
+
+### Comparison: Traditional vs AI-Assisted
+
+| Aspect | Traditional (CLI) | AI-Assisted |
+|--------|-------------------|-------------|
+| **User skill required** | Knows mmt-reader flags | Just knows the question |
+| **Command writing** | User types the command | AI generates it |
+| **Output interpretation** | User reads and understands | AI summarizes and highlights |
+| **Comparison** | User diffs two outputs manually | AI does it automatically |
+| **Best for** | Experts who want control | Anyone who wants answers fast |
+
+---
+
 ## Quick Reference: Flag Cheat Sheet
 
 | Flag | Meaning | When to use |
@@ -631,3 +812,4 @@ All experiments ran on this machine against `smallFlows.pcap` (Aug 12, 2026):
 | 3 — JSON Pipeline | `./mmtReader analyze -t smallFlows.pcap --json -q -a` | 38 protocol paths, 28 protocols, jq-parseable |
 | 4 — Live Monitor | `sudo ./mmtReader capture eth0 -a -b 100` | Requires live interface — representative output shown |
 | 5 — Session Audit | `./mmtReader analyze -t smallFlows.pcap -s -q` | 168 sessions (all IPv4), 47.86 pps, 0.56 fps |
+| 6 — AI Agent | `./mmtReader analyze -t smallFlows.pcap --json -q -a` | AI parses JSON → natural language answer |
