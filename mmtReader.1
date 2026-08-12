@@ -1,0 +1,81 @@
+.TH MMTREADER 1 "August 2026" "MMT-Reader 1.0" "User Commands"
+.SH NAME
+mmtReader \- deep packet inspection and per-protocol network statistics tool
+.SH SYNOPSIS
+.B mmtReader
+.RI [ OPTIONS ]
+.SH DESCRIPTION
+.B mmtReader
+analyzes network traffic from pcap capture files or live network interfaces and produces
+per-protocol statistics including packet counts, data volume, payload volume, and protocol
+path hierarchies. It leverages the MMT-DPI library for deep packet inspection and protocol
+classification.
+.SH OPTIONS
+.TP
+.B \-t, \-\-trace <file>
+Analyze a pcap capture file (offline mode). No root privileges required.
+.TP
+.B \-i, \-\-interface <iface>
+Capture traffic from a live network interface (online mode). Requires root privileges.
+.TP
+.B \-b, \-\-buffer <MB>
+Set the pcap handler buffer size in megabytes for live capture (default: 50).
+.TP
+.B \-a, \-\-paths
+Show per-protocol-path statistics (e.g., TCP.HTTP.Google).
+.TP
+.B \-x <0|1>
+Enable (1) or disable (0) IP address-based classification (default: 1).
+.TP
+.B \-y <0|1>
+Enable (1) or disable (0) hostname-based classification (default: 1).
+.TP
+.B \-z <0|1>
+Enable (1) or disable (0) port-based classification (default: 1).
+.TP
+.B \-h, \-\-help
+Print help and exit.
+.SH EXAMPLES
+Analyze a pcap file with protocol paths:
+.IP
+.B mmtReader \-t capture.pcap \-a
+.TP
+Live capture on eth0 with a 100 MB buffer:
+.IP
+.B sudo mmtReader \-i eth0 \-b 100 \-a
+.TP
+Disable IP classification:
+.IP
+.B mmtReader \-t capture.pcap \-a \-x 0
+.TP
+MMP-only mode (disable all classification):
+.IP
+.B mmtReader \-t capture.pcap \-a \-x 0 \-y 0 \-z 0
+.SH OUTPUT
+At the end of execution, mmtReader prints:
+.RS
+.IP \(bu 3
+Protocol statistics with path (if \fB\-a\fR is set)
+.IP \(bu 3
+Protocol statistics (aggregated)
+.IP \(bu 3
+Input statistics summary (packets, volume, sessions, duration, bandwidth)
+.IP \(bu 3
+PCAP statistics (online mode only: received packets and kernel drops)
+.RE
+.SH DEPENDENCIES
+Requires the MMT-DPI library installed at \fB/opt/mmt/dpi/\fR.
+Install from: https://bitbucket.org/montimage/mmt-dpi
+.SH EXIT STATUS
+.TP
+.B 0
+Successful analysis.
+.TP
+.B 1
+Help was printed or an error occurred.
+.SH AUTHOR
+Montimage <contact@montimage.com>
+.SH "REPORTING BUGS"
+See \fBCONTRIBUTING.md\fR in the project directory.
+.SH LICENSE
+Apache License 2.0

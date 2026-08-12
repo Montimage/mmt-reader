@@ -80,6 +80,38 @@ gcc -g -o mmtReader mmtReader.c \
     -lmmt_core -ldl -lpcap
 ```
 
+### Install Globally
+
+Make `mmtReader` available system-wide with the **self-contained installer** — it installs everything on a fresh machine:
+
+```bash
+# Full install: system deps + MMT-DPI + mmtReader (requires root)
+sudo ./install.sh
+
+# Install only mmtReader (MMT-DPI must already be present)
+sudo ./install.sh --mmt-reader-only
+
+# Custom install prefix (no root needed)
+./install.sh --prefix ~/local --mmt-reader-only
+
+# Verify
+mmtReader -h
+```
+
+The installer handles:
+1. **System dependencies** — gcc, make, libpcap-dev, etc.
+2. **MMT-DPI library** — builds from the sibling `mmt-dpi/` repo (or uses a pre-built copy)
+3. **mmtReader binary** — compiles and installs to your chosen prefix
+4. **Man page** — installs to `man1/` for `man mmtReader`
+
+Alternatively, use **make** (requires MMT-DPI pre-installed):
+
+```bash
+make build          # compile
+sudo make install   # install to /usr/local
+sudo make uninstall # remove
+```
+
 ## Usage
 
 ### Offline Mode (pcap file)
@@ -142,7 +174,10 @@ MMT-Reader prints four sections at the end of execution:
 
 ```
 mmtReader/
-├── mmtReader.c        # Single source file (~530 lines)
+├── mmtReader.c        # Single source file (~575 lines)
+├── mmtReader.1        # Man page
+├── Makefile           # Build, install, uninstall targets
+├── install.sh         # Global installer script
 ├── LICENSE            # Apache License 2.0
 ├── README.md          # This file
 ├── mmt-reader.png     # Screenshot
