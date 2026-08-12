@@ -7,10 +7,9 @@ MANDIR      ?= $(PREFIX)/share/man
 MAN1DIR     ?= $(MANDIR)/man1
 
 CC          ?= gcc
-CFLAGS      ?= -g -O2 -Wall
+CFLAGS      ?= -g -O2
 
-SRCS        = mmtReader.c argparse.c dispatch.c capture.c mmt_handler.c display.c
-OBJS        = $(SRCS:.c=.o)
+SRCS        = mmtReader.c core/engine.c utils/version.c cli/parse.c
 TARGET      = mmtReader
 
 .PHONY: all build install uninstall clean test
@@ -19,15 +18,14 @@ all: build
 
 build: $(TARGET)
 
-$(TARGET): $(OBJS)
+$(TARGET): $(SRCS)
 	$(CC) $(CFLAGS) -o $@ $^ \
+		-I. \
 		-I/opt/mmt/dpi/include \
+		-I./utils \
+		-I./cli \
 		-L/opt/mmt/dpi/lib \
 		-lmmt_core -ldl -lpcap
-
-%.o: %.c
-	$(CC) $(CFLAGS) -c -o $@ $< \
-		-I/opt/mmt/dpi/include
 
 install: build
 	@mkdir -p $(BINDIR)
@@ -42,7 +40,7 @@ uninstall:
 	@echo "Uninstalled."
 
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -f $(TARGET)
 
 test: build
-	./$(TARGET) -t smallFlows.pcap -a | tail -15
+	./$(TARGET) analyze -t smallFlows.pcap -a | tail -15
