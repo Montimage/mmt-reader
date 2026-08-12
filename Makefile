@@ -70,6 +70,11 @@ test: build
 	@test -f completions/mmtReader.zsh && echo "Zsh completion OK" || echo "Zsh completion missing"
 	@test -f completions/mmtReader.fish && echo "Fish completion OK" || echo "Fish completion missing"
 	@echo ""
+	@echo "=== Test 5: Completions exist ==="
+	@test -f completions/mmtReader.bash && echo "Bash completion ✓" || echo "Bash completion missing ✗"
+	@test -f completions/mmtReader.zsh && echo "Zsh completion ✓" || echo "Zsh completion missing ✗"
+	@test -f completions/mmtReader.fish && echo "Fish completion ✓" || echo "Fish completion missing ✗"
+	@echo ""
 	@echo "All tests passed!"
 
 completions:
