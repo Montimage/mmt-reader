@@ -7,6 +7,7 @@
 #   2. MMT-DPI library      (builds from source if not present)
 #   3. mmtReader binary     (compiles and installs)
 #   4. Man page
+#   5. Shell completions (bash)
 #
 # Usage:
 #   sudo ./install.sh                    # Install everything (default)
@@ -38,6 +39,7 @@ PREFIX="/usr/local"
 BINDIR="${PREFIX}/bin"
 MANDIR="${PREFIX}/share/man"
 MAN1DIR="${MANDIR}/man1"
+COMPLETIONS_DIR="${PREFIX}/share/bash-completion/completions"
 MMT_BASE="/opt/mmt"
 MMT_DPI_DIR="${MMT_BASE}/dpi"
 MMT_DPI_INC="${MMT_DPI_DIR}/include"
@@ -130,6 +132,12 @@ if $UNINSTALL; then
     if [[ -f "${MAN1DIR}/mmtReader.1" ]]; then
         run "rm -f '${MAN1DIR}/mmtReader.1'"
         info "Removed man page"
+    fi
+
+    # Remove bash completion
+    if [[ -f "${COMPLETIONS_DIR}/mmtReader" ]]; then
+        run "rm -f '${COMPLETIONS_DIR}/mmtReader'"
+        info "Removed bash completion"
     fi
 
     # Remove MMT-DPI
@@ -310,6 +318,23 @@ if [[ -f "mmtReader.1" ]]; then
     info "Man page → ${MAN1DIR}/mmtReader.1"
 else
     warn "mmtReader.1 not found — skipping man page."
+fi
+
+# Install shell completions
+if [[ -d "completions" ]]; then
+    run "mkdir -p '${COMPLETIONS_DIR}'"
+    if [[ -f "completions/mmtReader.bash" ]]; then
+        run "install -m 644 completions/mmtReader.bash '${COMPLETIONS_DIR}/mmtReader'"
+        info "Bash completion → ${COMPLETIONS_DIR}/mmtReader"
+    fi
+    if [[ -f "completions/mmtReader.zsh" ]]; then
+        info "Zsh completion available in completions/mmtReader.zsh (manual install)"
+    fi
+    if [[ -f "completions/mmtReader.fish" ]]; then
+        info "Fish completion available in completions/mmtReader.fish (manual install)"
+    fi
+else
+    warn "completions/ directory not found — skipping shell completions."
 fi
 
 # ─── Phase 5: Verify ──────────────────────────────────────

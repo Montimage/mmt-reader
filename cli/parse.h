@@ -11,7 +11,11 @@
 #define PARSE_H
 
 #include <stdio.h>
-#include "../core/engine.h"
+#include "config.h"
+
+/* Output format constants — defined here to avoid transitive dependency on core/engine.h */
+#define OUTPUT_FORMAT_TEXT  0
+#define OUTPUT_FORMAT_JSON  1
 
 /* ------------------------------------------------------------------ */
 /* Exit codes                                                          */
@@ -46,6 +50,8 @@ typedef struct {
     int         quiet;          /**< 1 if --quiet / MMTREADER_QUIET=1   */
     int         verbose;        /**< 1 if --verbose / -v                */
     int         json;           /**< 1 if --json / MMTREADER_JSON=1     */
+
+    const char *config_path;    /**< 1 if --config flag was passed      */
 
 } cli_options_t;
 
