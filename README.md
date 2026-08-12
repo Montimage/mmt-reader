@@ -14,7 +14,7 @@ An AI Agent receives a natural language question about network traffic, runs mmt
 
 ```mermaid
 flowchart LR
-    A[Human question<br/>"Which services are slow?"] --> B[AI Agent]
+    A[Human question<br/>Which services are slow?] --> B[AI Agent]
     B --> C[mmtReader analyze<br/>-t capture.pcap -a]
     C --> D[Protocol stats<br/>Packet counts, bandwidth,<br/>sessions per protocol]
     D --> E[AI Agent]
@@ -31,10 +31,10 @@ sequenceDiagram
     participant Agent as AI Agent
     participant Reader as mmtReader
     
-    Human->>Agent: "Which services use the most bandwidth?"
+    Human->>Agent: Which services use the most bandwidth?
     Agent->>Reader: ./mmtReader analyze -t capture.pcap -a --json
-    Reader-->>Agent: {protocols: [{name: "HTTP", ...}, ...]}
-    Agent->>Human: "HTTP dominates at 57% of traffic (1.05 MB)"
+    Reader-->>Agent: {protocols: [{name: HTTP, ...}, ...]}
+    Agent->>Human: HTTP dominates at 57% of traffic (1.05 MB)
 ```
 
 ## Architecture
