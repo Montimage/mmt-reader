@@ -3,6 +3,7 @@
  *
  * Encapsulates MMT-DPI handler initialization, packet processing,
  * and statistics collection. Provides a clean API for the CLI layer.
+ * Output formatting is delegated to cli/output.c.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +14,7 @@
 #include "engine.h"
 #include "mmt_core.h"
 #include "tcpip/mmt_tcpip.h"
+#include "output.h"
 
 /* ------------------------------------------------------------------ */
 /* Internal state                                                      */
@@ -23,136 +25,10 @@ struct engine {
     engine_stats_t stats;         /**< Accumulated statistics        */
 };
 
-/* Module-level proto_path_detail (shared by protocols_stats) */
+/* Module-level proto_path_detail (shared by output_print_stats) */
 static int proto_path_detail = 1;
 
-/* ------------------------------------------------------------------ */
-/* Protocol statistics helpers (linked-list sorting)                   */
-/* ------------------------------------------------------------------ */
 
-typedef struct proto_info {
-    const char *name;
-    uint64_t pkts;
-    uint64_t volume;
-    uint64_t payload;
-    struct proto_info *prev;
-    struct proto_info *next;
-} proto_info_t;
-
-static proto_info_t *proto_head = NULL;
-
-static void proto_info_free_all(void) {
-    proto_info_t *current = proto_head;
-    while (current != NULL) {
-        proto_info_t *next = current->next;
-        free(current);
-        current = next;
-    }
-    proto_head = NULL;
-}
-
-static void proto_info_insert(proto_info_t *p_info) {
-    if (proto_head == NULL) {
-        proto_head = p_info;
-        return;
-    }
-    proto_info_t *current = proto_head;
-    while (current != NULL) {
-        if (p_info->pkts > current->pkts) {
-            p_info->next = current;
-            p_info->prev = current->prev;
-            if (current->prev != NULL) {
-                current->prev->next = p_info;
-            } else {
-                proto_head = p_info;
-            }
-            current->prev = p_info;
-            return;
-        }
-        if (current->next == NULL) {
-            current->next = p_info;
-            p_info->prev = current;
-            return;
-        }
-        current = current->next;
-    }
-}
-
-/* ------------------------------------------------------------------ */
-/* Protocol path string conversion                                     */
-/* ------------------------------------------------------------------ */
-
-static int proto_hierarchy_ids_to_str(const proto_hierarchy_t *proto_hierarchy,
-                                       char *dest) {
-    int offset = 0;
-    if (proto_hierarchy->len < 1) {
-        offset += sprintf(dest, ".");
-    } else {
-        int index = 1;
-        offset += sprintf(dest, "%s",
-                          get_protocol_name_by_id(proto_hierarchy->proto_path[index]));
-        index++;
-        for (; index < proto_hierarchy->len && index < 16; index++) {
-            offset += sprintf(&dest[offset], ".%s",
-                              get_protocol_name_by_id(proto_hierarchy->proto_path[index]));
-        }
-    }
-    return offset;
-}
-
-/* ------------------------------------------------------------------ */
-/* Attribute / protocol iterators                                      */
-/* ------------------------------------------------------------------ */
-
-static void attributes_iterator(attribute_metadata_t *attribute,
-                                uint32_t proto_id,
-                                void *args) {
-    register_extraction_attribute(args, proto_id, attribute->id);
-}
-
-static void protocols_iterator(uint32_t proto_id, void *args) {
-    iterate_through_protocol_attributes(proto_id, attributes_iterator, args);
-}
-
-/* ------------------------------------------------------------------ */
-/* Protocol stats iterator (uses static proto_path_detail)             */
-/* ------------------------------------------------------------------ */
-
-static void protocols_stats(uint32_t proto_id, void *args) {
-    if (proto_id == 1) return; /* Ignore PROTO_META */
-
-    proto_statistics_t *proto_stats = get_protocol_stats((mmt_handler_t *)args, proto_id);
-    if (proto_stats != NULL) {
-        proto_info_t *p_info = (proto_info_t *)malloc(sizeof(proto_info_t));
-        if (p_info == NULL) return;
-        memset(p_info, 0, sizeof(proto_info_t));
-
-        const char *proto_name = get_protocol_name_by_id(proto_id);
-        p_info->name = proto_name;
-
-        while (proto_stats != NULL) {
-            if (proto_stats->touched) {
-                p_info->pkts += proto_stats->packets_count;
-                p_info->volume += proto_stats->data_volume;
-                p_info->payload += proto_stats->payload_volume;
-                if (proto_path_detail) {
-                    proto_hierarchy_t proto_hierarchy = {0};
-                    get_protocol_stats_path((mmt_handler_t *)args, proto_stats,
-                                            &proto_hierarchy);
-                    char path[128];
-                    proto_hierarchy_ids_to_str(&proto_hierarchy, path);
-                    printf("%10lu %10lu %10lu %60s\n",
-                           proto_stats->packets_count,
-                           proto_stats->data_volume,
-                           proto_stats->payload_volume,
-                           path);
-                }
-            }
-            proto_stats = proto_stats->next;
-        }
-        proto_info_insert(p_info);
-    }
-}
 
 /* ------------------------------------------------------------------ */
 /* Packet handler (internal)                                           */
@@ -246,7 +122,7 @@ engine_t *engine_create(int dlt, int flags, char *errbuf) {
 void engine_destroy(engine_t *eng) {
     if (eng == NULL) return;
 
-    /* Print final stats */
+    /* Print final stats (delegated to output module) */
     engine_print_stats(eng);
 
     /* Close MMT handler */
@@ -254,9 +130,6 @@ void engine_destroy(engine_t *eng) {
         mmt_close_handler(eng->mmt);
         close_extraction();
     }
-
-    /* Free protocol info list */
-    proto_info_free_all();
 
     free(eng);
 }
@@ -326,49 +199,8 @@ void engine_get_stats(const engine_t *eng, engine_stats_t *out) {
 void engine_print_stats(const engine_t *eng) {
     if (eng == NULL) return;
 
-    const engine_stats_t *s = &eng->stats;
-
-    printf("\n- - - - - - MMT-READER STATS - - - - -\n\n");
-    if (proto_path_detail) {
-        printf("Protocol statistics with the protocol path:\n\n");
-    }
-    printf("\t#pkts\t#volume\t#payload\t#proto_path\n");
-    iterate_through_protocols(protocols_stats, eng->mmt);
-
-    printf("\nProtocol statistics:\n\n");
-    printf("\t#pkts\t#volume\t#payload\t#proto_name\n");
-
-    proto_info_t *current = proto_head;
-    while (current != NULL) {
-        printf("%10lu %10lu %10lu %20s\n",
-               current->pkts, current->volume, current->payload, current->name);
-        proto_info_t *next = current->next;
-        free(current);
-        current = next;
-    }
-    proto_head = NULL;
-
-    printf(">>>>>> INPUT STATISTICS <<<<<< \n\n");
-
-    /* Calculate duration */
-    double duration = 0;
-    if (s->end_time.tv_sec > s->init_time.tv_sec) {
-        duration = (double)(s->end_time.tv_sec - s->init_time.tv_sec);
-    } else {
-        duration = 1.0; /* avoid division by zero */
-    }
-
-    printf("\tPackets: %lu\n", s->nb_packets);
-    printf("\tData: %lu bytes\n", s->data_volume);
-    printf("\tSessions: %lu\n", s->nb_ipv4_sessions + s->nb_ipv6_sessions);
-    printf("\tProtocols: %lu\n", s->nb_protocols);
-    printf("\tDuration: %.0f seconds\n", duration);
-    printf("\tBandwidth: %.2f bytes/second\n",
-           s->data_volume / duration);
-    printf("\tpps: %.2f packets/second\n",
-           (double)s->nb_packets / duration);
-    printf("\tfps: %.2f sessions/second\n\n",
-           (double)(s->nb_ipv4_sessions + s->nb_ipv6_sessions) / duration);
+    /* Delegate output formatting to the output module */
+    output_print_stats(stdout, eng->mmt, proto_path_detail, &eng->stats);
 }
 
 void engine_print_pcap_stats(const struct pcap_stat *pcs) {
