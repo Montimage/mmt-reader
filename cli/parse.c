@@ -263,7 +263,7 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
     /* Reset getopt state after argv shift */
     optind = 1;
 
-    while ((opt = getopt_long(argc, argv, "t:i:b:haVsqjTCx:y:z:c:",
+    while ((opt = getopt_long(argc, argv, "t:i:b:haVsqjTCx:y:z:c:v",
                               long_options, NULL)) != EOF) {
         switch (opt) {
         case 't':
@@ -318,6 +318,7 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
 
         case 'j':
         case 'J':
+            opts->json          = 1;
             opts->output_format = OUTPUT_FORMAT_JSON;
             break;
 

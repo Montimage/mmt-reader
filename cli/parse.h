@@ -11,8 +11,11 @@
 #define PARSE_H
 
 #include <stdio.h>
-#include "../core/engine.h"
-#include "../config.h"
+#include "config.h"
+
+/* Output format constants — defined here to avoid transitive dependency on core/engine.h */
+#define OUTPUT_FORMAT_TEXT  0
+#define OUTPUT_FORMAT_JSON  1
 
 /* ------------------------------------------------------------------ */
 /* Exit codes                                                          */

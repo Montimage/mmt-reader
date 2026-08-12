@@ -63,7 +63,7 @@ test: build
 	gcc -g -o test_config tests/test_config.c config.c -I. && ./test_config && rm -f test_config
 	@echo ""
 	@echo "=== Test 6: Parse unit tests ==="
-	gcc -g -o test_parse tests/test_parse.c cli/parse.c -I./cli -I./utils && ./test_parse && rm -f test_parse
+	gcc -g -o test_parse tests/test_parse.c cli/parse.c config.c -I. -I./utils && ./test_parse && rm -f test_parse
 	@echo ""
 	@echo "=== Test 7: Completions exist ==="
 	@test -f completions/mmtReader.bash && echo "Bash completion OK" || echo "Bash completion missing"

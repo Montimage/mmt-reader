@@ -103,6 +103,7 @@ The installer handles:
 2. **MMT-DPI library** — builds from the sibling `mmt-dpi/` repo (or uses a pre-built copy)
 3. **mmtReader binary** — compiles and installs to your chosen prefix
 4. **Man page** — installs to `man1/` for `man mmtReader`
+5. **Shell completions** — installs bash completion to `share/bash-completion/completions/`
 
 Alternatively, use **make** (requires MMT-DPI pre-installed):
 
@@ -111,6 +112,50 @@ make build          # compile
 sudo make install   # install to /usr/local
 sudo make uninstall # remove
 ```
+
+## Shell Completions
+
+Install shell completions for tab-completion of subcommands, flags, and file paths.
+
+### Automatic (via installer)
+
+The `install.sh` script and `make install` both install bash completions automatically.
+
+### Manual Installation
+
+**Bash** — copy to your system completions directory:
+```bash
+sudo cp completions/mmtReader.bash /usr/share/bash-completion/completions/mmtReader
+```
+
+Or add to `~/.bashrc`:
+```bash
+echo 'source "$(dirname "$(readlink -f "$0")")/completions/mmtReader.bash"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**Zsh** — copy to your fpath:
+```bash
+mkdir -p ~/.zsh/completions
+cp completions/mmtReader.zsh ~/.zsh/completions/_mmtReader
+echo 'fpath+=(~/.zsh/completions)' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**Fish** — copy to completions directory:
+```bash
+mkdir -p ~/.config/fish/completions
+cp completions/mmtReader.fish ~/.config/fish/completions/mmtReader.fish
+```
+
+### What's Completed
+
+- **Subcommands**: `analyze`, `capture`
+- **Options**: All short (`-t`, `-i`, etc.) and long (`--trace`, `--interface`, etc.) flags
+- **File paths**: Auto-filters `.pcap` files for the `-t/--trace` option
+- **Interfaces**: Lists available network interfaces from `/sys/class/net/` for `-i/--interface`
+- **Buffer size**: Suggests common values (`1`, `10`, `25`, `50`, `100`, etc.) for `-b/--buffer`
+- **Classification flags**: Offers `0` or `1` for `-x`, `-y`, `-z`
 
 ## Usage
 
@@ -185,6 +230,10 @@ mmtReader/
 ├── CONTRIBUTING.md    # How to contribute
 ├── CODE_OF_CONDUCT.md # Contributor Covenant v2.1
 ├── SECURITY.md        # Vulnerability reporting
+├── completions/       # Shell completion scripts
+│   ├── mmtReader.bash # Bash completion
+│   ├── mmtReader.zsh  # Zsh completion
+│   └── mmtReader.fish # Fish completion
 └── docs/
     ├── USER_GUIDE.md      # Full CLI reference and examples
     ├── DEVELOPMENT.md     # Build, extend, and debug guide
