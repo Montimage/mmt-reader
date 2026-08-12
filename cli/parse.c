@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include "parse.h"
+#include "../config.h"
 
 /* ------------------------------------------------------------------ */
 /* Environment variable helpers                                        */
@@ -59,6 +60,10 @@ static const char *analyze_help =
 "  -h, --help               Show this help message\n"
 "  -V, --version            Print version information\n"
 "\n"
+"  -c, --config <file>      Use config file for default options\n"
+"                           (default: ~/.mmtreader.conf)\n"
+"                           CLI flags override config file values.\n"
+"\n"
 "Environment variables:\n"
 "  MMTREADER_JSON=1         Force JSON output\n"
 "  MMTREADER_NO_COLOR=1     Disable color output\n"
@@ -93,6 +98,10 @@ static const char *capture_help =
 "  -h, --help               Show this help message\n"
 "  -V, --version            Print version information\n"
 "\n"
+"  -c, --config <file>      Use config file for default options\n"
+"                           (default: ~/.mmtreader.conf)\n"
+"                           CLI flags override config file values.\n"
+"\n"
 "Environment variables:\n"
 "  MMTREADER_JSON=1         Force JSON output\n"
 "  MMTREADER_NO_COLOR=1     Disable color output\n"
@@ -118,6 +127,10 @@ static const char *general_help =
 "  -v, --verbose            Show verbose debug output\n"
 "  -h, --help       Show this help message\n"
 "  -V, --version    Print version information\n"
+"\n"
+"  -c, --config <file>      Use config file for default options\n"
+"                           (default: ~/.mmtreader.conf)\n"
+"                           CLI flags override config file values.\n"
 "\n"
 "Environment variables:\n"
 "  MMTREADER_JSON=1         Force JSON output\n"
@@ -150,6 +163,7 @@ static const struct option long_options[] = {
     { "ip-classify",     required_argument, NULL, 'x' },
     { "hostname-classify", required_argument, NULL, 'y' },
     { "port-classify",   required_argument, NULL, 'z' },
+    { "config",          required_argument, NULL, 'c' },
     { "help",            no_argument,       NULL, 'h' },
     { "version",         no_argument,       NULL, 'V' },
     { "no-color",        no_argument,       NULL, 'C' },
@@ -176,6 +190,7 @@ void parse_init(cli_options_t *opts) {
     opts->quiet           = 0;
     opts->verbose         = 0;
     opts->json            = 0;
+    opts->config_path     = NULL;
 
     /* Environment variables (lowest priority — CLI flags override these) */
     opts->json    = env_get_int("MMTREADER_JSON");
@@ -192,6 +207,23 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
 
     /* Initialize options to defaults */
     parse_init(opts);
+
+    /* Load config file (lowest priority — env vars and CLI flags override these) */
+    config_t file_cfg;
+    config_init(&file_cfg);
+    if (config_load(&file_cfg, NULL) == 0 && file_cfg.loaded) {
+        opts->json     = file_cfg.json;
+        opts->quiet    = file_cfg.quiet;
+        opts->verbose  = file_cfg.verbose;
+        opts->no_color = file_cfg.no_color;
+        opts->buffer_mb = file_cfg.buffer[CONFIG_SECTION_GLOBAL];
+        if (opts->buffer_mb == 0) opts->buffer_mb = 50;
+    }
+
+    /* Environment variables (medium priority — CLI flags override these) */
+    opts->json    = env_get_int("MMTREADER_JSON");
+    opts->no_color = env_get_int("MMTREADER_NO_COLOR");
+    opts->quiet   = env_get_int("MMTREADER_QUIET");
 
     /* Determine subcommand from first non-option argument */
     if (argc > 1) {
@@ -231,7 +263,7 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
     /* Reset getopt state after argv shift */
     optind = 1;
 
-    while ((opt = getopt_long(argc, argv, "t:i:b:haVsqjTCx:y:z:",
+    while ((opt = getopt_long(argc, argv, "t:i:b:haVsqjTCx:y:z:c:",
                               long_options, NULL)) != EOF) {
         switch (opt) {
         case 't':
@@ -348,6 +380,21 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
                 fprintf(stdout, capture_help, prog_name);
             }
             return PARSE_EXIT_OK;
+
+        case 'c':
+            opts->config_path = optarg;
+            /* Reload config with user-specified path */
+            config_t custom_cfg;
+            config_init(&custom_cfg);
+            if (config_load(&custom_cfg, optarg) == 0 && custom_cfg.loaded) {
+                opts->json     = custom_cfg.json;
+                opts->quiet    = custom_cfg.quiet;
+                opts->verbose  = custom_cfg.verbose;
+                opts->no_color = custom_cfg.no_color;
+                opts->buffer_mb = custom_cfg.buffer[CONFIG_SECTION_GLOBAL];
+                if (opts->buffer_mb == 0) opts->buffer_mb = 50;
+            }
+            break;
 
         default:
             parse_error(prog_name);
