@@ -38,6 +38,7 @@ typedef struct {
     int         hostname_classify; /**< hostname classification (-y)      */
     int         port_classify;    /**< port number classification (-z)    */
     int         show_help;      /**< 1 if --help was shown              */
+    int         no_color;       /**< 1 if --no-color is set             */
 } cli_options_t;
 
 /* ------------------------------------------------------------------ */

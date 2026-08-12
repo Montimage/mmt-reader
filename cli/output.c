@@ -7,6 +7,10 @@
  * All printf-based formatting has been extracted from core/engine.c
  * into this dedicated module, giving the engine a clean API that
  * delegates presentation to the output layer.
+ *
+ * Color output is controlled by the colors module (colors_init(),
+ * colors_set_enabled()) which respects the NO_COLOR environment
+ * variable and the --no-color command-line flag.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +20,7 @@
 #include "mmt_core.h"
 #include "tcpip/mmt_tcpip.h"
 #include "output.h"
+#include "colors.h"
 
 /* ------------------------------------------------------------------ */
 /* Internal types                                                      */
@@ -46,15 +51,6 @@ typedef struct {
 /* ------------------------------------------------------------------ */
 /* Protocol info list helpers                                          */
 /* ------------------------------------------------------------------ */
-
-static void proto_info_free_all(proto_info_t *head) {
-    proto_info_t *current = head;
-    while (current != NULL) {
-        proto_info_t *next = current->next;
-        free(current);
-        current = next;
-    }
-}
 
 static void proto_info_insert(proto_info_t **head, proto_info_t *p_info) {
     if (*head == NULL) {
@@ -159,29 +155,36 @@ void output_print_stats(FILE *fp,
 
     proto_info_t *agg_head = NULL;
 
-    fprintf(fp, "\n- - - - - - MMT-READER STATS - - - - -\n\n");
+    /* Main header — bold yellow */
+    colors_fprintf(fp, COLOR_BOLD, "\n- - - - - - MMT-READER STATS - - - - -\n\n");
+
     if (proto_path) {
         fprintf(fp, "Protocol statistics with the protocol path:\n\n");
     }
-    fprintf(fp, "\t#pkts\t#volume\t#payload\t#proto_path\n");
+    /* Column headers — bold */
+    colors_fprintf(fp, COLOR_BOLD, "\t#pkts\t#volume\t#payload\t#proto_path\n");
     {
         proto_iter_ctx_t ctx = { mmt, proto_path, &agg_head, fp };
         iterate_through_protocols(protocols_stats_iterator, &ctx);
     }
 
-    fprintf(fp, "\nProtocol statistics:\n\n");
-    fprintf(fp, "\t#pkts\t#volume\t#payload\t#proto_name\n");
+    /* Section header — bold yellow */
+    colors_fprintf(fp, COLOR_BOLD, "\nProtocol statistics:\n\n");
+    colors_fprintf(fp, COLOR_BOLD, "\t#pkts\t#volume\t#payload\t#proto_name\n");
 
     proto_info_t *current = agg_head;
     while (current != NULL) {
-        fprintf(fp, "%10lu %10lu %10lu %20s\n",
-                current->pkts, current->volume, current->payload, current->name);
+        /* Protocol name in cyan */
+        fprintf(fp, "%10lu %10lu %10lu ",
+                current->pkts, current->volume, current->payload);
+        colors_fprintf_fmt(fp, COLOR_CYAN, "%s\n", current->name);
         proto_info_t *next = current->next;
         free(current);
         current = next;
     }
 
-    fprintf(fp, ">>>>>> INPUT STATISTICS <<<<<< \n\n");
+    /* Input statistics header — bold green */
+    colors_fprintf_fmt(fp, COLOR_BOLD_GREEN, ">>>>>> INPUT STATISTICS <<<<<< \n\n");
 
     /* Calculate duration */
     double duration = 0;
@@ -191,11 +194,22 @@ void output_print_stats(FILE *fp,
         duration = 1.0; /* avoid division by zero */
     }
 
-    fprintf(fp, "\tPackets: %lu\n", stats->nb_packets);
-    fprintf(fp, "\tData: %lu bytes\n", stats->data_volume);
-    fprintf(fp, "\tSessions: %lu\n", stats->nb_ipv4_sessions + stats->nb_ipv6_sessions);
-    fprintf(fp, "\tProtocols: %lu\n", stats->nb_protocols);
-    fprintf(fp, "\tDuration: %.0f seconds\n", duration);
+    /* Label/value pairs — labels in bold */
+    colors_fprintf(fp, COLOR_BOLD, "\tPackets: ");
+    fprintf(fp, "%lu\n", stats->nb_packets);
+
+    colors_fprintf(fp, COLOR_BOLD, "\tData: ");
+    fprintf(fp, "%lu bytes\n", stats->data_volume);
+
+    colors_fprintf(fp, COLOR_BOLD, "\tSessions: ");
+    fprintf(fp, "%lu\n", stats->nb_ipv4_sessions + stats->nb_ipv6_sessions);
+
+    colors_fprintf(fp, COLOR_BOLD, "\tProtocols: ");
+    fprintf(fp, "%lu\n", stats->nb_protocols);
+
+    colors_fprintf(fp, COLOR_BOLD, "\tDuration: ");
+    fprintf(fp, "%.0f seconds\n", duration);
+
     fprintf(fp, "\tBandwidth: %.2f bytes/second\n",
             stats->data_volume / duration);
     fprintf(fp, "\tpps: %.2f packets/second\n",

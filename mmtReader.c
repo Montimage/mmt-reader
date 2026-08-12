@@ -19,6 +19,7 @@
 #endif
 #include "core/engine.h"
 #include "utils/version.h"
+#include "utils/colors.h"
 #include "cli/parse.h"
 
 static volatile sig_atomic_t got_signal = 0;
@@ -28,9 +29,18 @@ static volatile sig_atomic_t got_signal = 0;
 /* ------------------------------------------------------------------ */
 
 static void signal_handler(int type) {
-    printf("\nINFO: reception of signal %d\n", type);
+    /* Use async-signal-safe write() — printf is not signal-safe */
+    ssize_t ret;
+    const char msg[] = "\nINFO: reception of signal ";
+    ret = write(STDOUT_FILENO, msg, sizeof(msg) - 1);
+    (void)ret;
+    char buf[16];
+    int len = snprintf(buf, sizeof(buf), "%d\n", type);
+    if (len > 0 && (size_t)len < sizeof(buf)) {
+        ret = write(STDOUT_FILENO, buf, (size_t)len);
+        (void)ret;
+    }
     got_signal = 1;
-    fflush(stderr);
 }
 
 /* ------------------------------------------------------------------ */
@@ -70,12 +80,18 @@ static pcap_t *init_pcap(const char *iname, uint16_t buffer_size, uint16_t snapl
 int main(int argc, char **argv) {
     cli_options_t opts;
 
+    /* Initialize color support (respects NO_COLOR env var) */
+    colors_init();
     /* Parse options (may exit on --version or --help) */
     int rc = parse_options(argc, argv, &opts);
     if (rc != PARSE_EXIT_OK) {
         return EXIT_FAILURE;
     }
 
+    /* Override color support if --no-color was passed */
+    if (opts.no_color) {
+        colors_set_enabled(0);
+    }
     /* If --version was requested, print banner + version and exit */
     if (opts.mode == 3) {
         version_banner(argv[0]);
