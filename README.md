@@ -12,29 +12,30 @@ MMT-Reader analyzes network traffic from pcap capture files or live network inte
 
 ## Key Features
 
+- **Subcommand interface** — `analyze` for pcap files, `capture` for live interfaces
 - **Dual input modes** — Read from pcap files (offline) or live network interfaces (online)
 - **Per-protocol statistics** — Packet count, data volume, and payload volume for every detected protocol
-- **Protocol path display** — Full DPI path hierarchy (e.g. `TCP.HTTP.Google`) with the `-a` flag
+- **Protocol path display** — Full DPI path hierarchy (e.g. `TCP.HTTP.Google`) with the `-a/--proto-path` flag
+- **JSON output** — Machine-readable statistics with `--json`
 - **Three classification strategies** — IP address (`-x`), hostname (`-y`), and port (`-z`) fingerprinting, each independently toggleable
 - **Real-time monitoring** — Live capture with configurable buffer size (`-b`) and kernel/driver drop reporting
-- **IPv4 & IPv6 session tracking** — Automatic session counting for both address families
+- **IPv4 & IPv6 session tracking** — Per-protocol session counts with `-s/--sessions`
+- **Config file support** — INI-style `~/.mmtreader.conf` with per-command sections
+- **Environment variables** — `MMTREADER_JSON`, `MMTREADER_NO_COLOR`, `MMTREADER_QUIET`
 - **Graceful shutdown** — Press Ctrl+C to stop live capture and print final statistics
-- **Single-file, zero-dependency on project** — All logic in one C source file; only system libraries required
+- **Modular architecture** — Clean separation: engine (core/), CLI parsing (cli/), output rendering (cli/), capture (capture/), config (config/), utilities (utils/)
 
 ## Quick Start
 
 ```bash
-# Compile (see Installation below for dependencies)
-gcc -g -o mmtReader mmtReader.c \
-    -I /opt/mmt/dpi/include \
-    -L /opt/mmt/dpi/lib \
-    -lmmt_core -ldl -lpcap
+# Build (requires MMT-DPI installed)
+make build
 
 # Analyze a pcap file
-./mmtReader -t smallFlows.pcap -a
+./mmtReader analyze -t smallFlows.pcap -a
 
 # Monitor a live interface (requires root)
-sudo ./mmtReader -i eth0 -a
+sudo ./mmtReader capture eth0 -a
 ```
 
 ## Installation
@@ -74,10 +75,7 @@ Install MMT-DPI following the upstream instructions before compiling.
 ### Compile
 
 ```bash
-gcc -g -o mmtReader mmtReader.c \
-    -I /opt/mmt/dpi/include \
-    -L /opt/mmt/dpi/lib \
-    -lmmt_core -ldl -lpcap
+make build
 ```
 
 ### Install Globally
@@ -148,62 +146,85 @@ mkdir -p ~/.config/fish/completions
 cp completions/mmtReader.fish ~/.config/fish/completions/mmtReader.fish
 ```
 
-### What's Completed
-
-- **Subcommands**: `analyze`, `capture`
-- **Options**: All short (`-t`, `-i`, etc.) and long (`--trace`, `--interface`, etc.) flags
-- **File paths**: Auto-filters `.pcap` files for the `-t/--trace` option
-- **Interfaces**: Lists available network interfaces from `/sys/class/net/` for `-i/--interface`
-- **Buffer size**: Suggests common values (`1`, `10`, `25`, `50`, `100`, etc.) for `-b/--buffer`
-- **Classification flags**: Offers `0` or `1` for `-x`, `-y`, `-z`
-
 ## Usage
 
-### Offline Mode (pcap file)
+MMT-Reader uses a subcommand-based interface. Available commands:
 
-```bash
-./mmtReader -t <path_to_pcap_file> [OPTIONS]
-```
+| Subcommand | Description |
+|------------|-------------|
+| `analyze` | Analyze a PCAP trace file (offline mode) |
+| `capture` | Capture and analyze live network traffic (online mode) |
 
-No root privileges required. Reads and replays traffic deterministically.
-
-### Online Mode (live interface)
-
-```bash
-sudo ./mmtReader -i <interface_name> [OPTIONS]
-```
-
-Requires root/administrator privileges. Interface must be Ethernet (DLT_EN10MB).
-
-### CLI Options Reference
+### Global Options
 
 | Flag | Argument | Default | Description |
 |------|----------|---------|-------------|
-| `-t <file>` | Path to pcap file | — | **Offline mode** — analyze a pcap capture file |
-| `-i <iface>` | Interface name (e.g. `eth0`) | — | **Online mode** — live traffic capture |
-| `-b <MB>` | Buffer size in MB | 50 | Pcap handler buffer for live capture |
-| `-a` | None | off | Show per-protocol-path statistics |
+| `-q, --quiet` | None | 0 | Suppress progress output |
+| `-v, --verbose` | None | 0 | Verbose debug output to stderr |
+| `-h, --help` | None | — | Print help and exit |
+| `-V, --version` | None | — | Print version and exit |
 | `-x <0|1>` | `1` = enable, `0` = disable | 1 | IP address classification |
 | `-y <0|1>` | `1` = enable, `0` = disable | 1 | Hostname classification |
 | `-z <0|1>` | `1` = enable, `0` = disable | 1 | Port number classification |
-| `-h` | None | — | Print help and exit |
+| `-j, --json` | None | 0 | JSON output format |
+| `-T, --text` | None | 0 | Explicit text output (default) |
+| `-C, --no-color` | None | 0 | Disable ANSI color output |
 
-> **Note:** `-x`, `-y`, and `-z` are undocumented in the built-in `-h` help but are fully functional.
+> **Note:** `-x`, `-y`, and `-z` are hidden from `--help` but fully functional.
+
+### `analyze` Subcommand
+
+```bash
+./mmtReader analyze [OPTIONS]
+```
+
+| Flag | Argument | Description |
+|------|----------|-------------|
+| `-t, --trace <file>` | Path to pcap file | **Required** — analyze a pcap capture file |
+| `-b, --buffer <MB>` | Buffer size in MB | For live capture (default: 50) |
+| `-a, --proto-path` | None | Show per-protocol-path statistics |
+| `-s, --sessions` | None | Show per-protocol session counts |
+| `-j, --json` | None | JSON output format |
+
+No root privileges required. Reads and replays traffic deterministically.
+
+### `capture` Subcommand
+
+```bash
+./mmtReader capture [OPTIONS] [interface]
+```
+
+| Flag | Argument | Description |
+|------|----------|-------------|
+| `-i, --interface <iface>` | Interface name | Network interface to capture from |
+| `interface` (positional) | Interface name | Alternative: `mmtReader capture eth0` |
+| `-b, --buffer <MB>` | Buffer size in MB | Pcap handler buffer (default: 50) |
+| `-a, --proto-path` | None | Show per-protocol-path statistics |
+| `-s, --sessions` | None | Show per-protocol session counts |
+| `-j, --json` | None | JSON output format |
+
+Requires root/administrator privileges. Interface must be Ethernet (DLT_EN10MB).
 
 ### Usage Examples
 
 ```bash
 # Analyze a pcap file with protocol paths
-./mmtReader -t smallFlows.pcap -a
+./mmtReader analyze -t smallFlows.pcap -a
 
 # Live capture with custom 100 MB buffer
-sudo ./mmtReader -i eth0 -b 100 -a
+sudo ./mmtReader capture eth0 -b 100 -a
 
 # Disable IP classification (faster, less accurate)
-./mmtReader -t capture.pcap -a -x 0
+./mmtReader analyze -t capture.pcap -a -x 0
 
 # MMP-only mode (disable all classification)
-./mmtReader -t capture.pcap -a -x 0 -y 0 -z 0
+./mmtReader analyze -t capture.pcap -a -x 0 -y 0 -z 0
+
+# JSON output with session counts
+./mmtReader analyze -t capture.pcap --json -s
+
+# Verbose mode with quiet output
+./mmtReader analyze -t capture.pcap -v -q
 ```
 
 ### Output Format
@@ -219,14 +240,14 @@ MMT-Reader prints four sections at the end of execution:
 
 ```
 mmtReader/
-├── mmtReader.c        # Single source file (~575 lines)
+├── mmtReader.c        # Thin CLI entry point (~150 lines)
 ├── mmtReader.1        # Man page
 ├── Makefile           # Build, install, uninstall targets
-├── install.sh         # Global installer script
+├── install.sh         # Self-contained global installer
 ├── LICENSE            # Apache License 2.0
 ├── README.md          # This file
 ├── mmt-reader.png     # Screenshot
-├── smallFlows.pcap    # Test pcap (if bundled)
+├── smallFlows.pcap    # Test pcap
 ├── CONTRIBUTING.md    # How to contribute
 ├── CODE_OF_CONDUCT.md # Contributor Covenant v2.1
 ├── SECURITY.md        # Vulnerability reporting
@@ -234,11 +255,29 @@ mmtReader/
 │   ├── mmtReader.bash # Bash completion
 │   ├── mmtReader.zsh  # Zsh completion
 │   └── mmtReader.fish # Fish completion
+├── core/
+│   ├── engine.c       # MMT-DPI engine: packet processing, stats
+│   └── engine.h       # Engine API
+├── cli/
+│   ├── parse.c/h      # Argument parsing, subcommand dispatch
+│   └── output.c/h     # Text/JSON output rendering
+├── capture.c/h        # Live pcap capture operations
+├── config.c/h         # INI config file support
+├── utils/
+│   ├── version.c/h    # Version banner and display
+│   └── colors.c/h     # ANSI color support
+├── tests/
+│   ├── test_config.c  # Config file parsing tests
+│   ├── test_anomaly.c # Anomaly detection tests
+│   ├── test_parse.c   # CLI parsing tests
+│   └── test_cli.sh    # Integration tests
 └── docs/
     ├── USER_GUIDE.md      # Full CLI reference and examples
     ├── DEVELOPMENT.md     # Build, extend, and debug guide
     ├── ARCHITECTURE.md    # 4-layer architecture diagram
-    └── CHANGELOG.md       # Version history
+    ├── CHANGELOG.md       # Version history
+    ├── CONFIG.md          # Config file reference
+    └── TESTING.md         # Test suite guide
 ```
 
 ## Documentation
@@ -248,6 +287,8 @@ mmtReader/
 | [USER_GUIDE.md](docs/USER_GUIDE.md) | Full CLI reference, output format, usage examples, and troubleshooting |
 | [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Build instructions, code structure, adding protocol handlers, debugging |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 4-layer architecture diagram and data flow |
+| [CONFIG.md](docs/CONFIG.md) | INI config file reference (`~/.mmtreader.conf`) |
+| [TESTING.md](docs/TESTING.md) | Test suite guide and how to run tests |
 | [CHANGELOG.md](docs/CHANGELOG.md) | Version history and release notes |
 
 ## Related Publications

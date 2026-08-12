@@ -11,6 +11,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] — 2024
+
+### Added
+
+- **Subcommand interface** — `analyze` for pcap files, `capture` for live interfaces ([#23](https://github.com/Montimage/mmt-reader/pull/23))
+- **JSON output** — Machine-readable statistics with `--json` / `-j` ([#27](https://github.com/Montimage/mmt-reader/pull/27))
+- **Session counts** — Per-protocol session breakdown with `--sessions` / `-s` ([#27](https://github.com/Montimage/mmt-reader/pull/27))
+- **Config file support** — INI-style `~/.mmtreader.conf` with per-command sections ([#32](https://github.com/Montimage/mmt-reader/pull/32))
+- **Environment variables** — `MMTREADER_JSON`, `MMTREADER_NO_COLOR`, `MMTREADER_QUIET` ([#26](https://github.com/Montimage/mmt-reader/pull/26))
+- **Quiet mode** — `--quiet` / `-q` to suppress progress output ([#26](https://github.com/Montimage/mmt-reader/pull/26))
+- **Verbose mode** — `--verbose` / `-v` for debug output to stderr ([#26](https://github.com/Montimage/mmt-reader/pull/26))
+- **Color support** — ANSI color output with `--no-color` / `-C` and `NO_COLOR` env var ([#25](https://github.com/Montimage/mmt-reader/pull/25))
+- **Shell completions** — Bash, Zsh, and Fish tab-completion for subcommands, flags, and paths ([#30](https://github.com/Montimage/mmt-reader/pull/30))
+- **Positional interface** — `capture eth0` as alternative to `--interface eth0` ([#28](https://github.com/Montimage/mmt-reader/pull/28))
+- **Anomaly detection hooks** — Extensible anomaly detection context for future use ([#31](https://github.com/Montimage/mmt-reader/pull/31))
+- **Man page** — Updated for subcommand interface and new options ([#29](https://github.com/Montimage/mmt-reader/pull/29))
+
+### Changed
+
+- **Modular architecture** — Split single-file app into modular components: `core/`, `cli/`, `capture/`, `config/`, `utils/` ([#20](https://github.com/Montimage/mmt-reader/pull/20))
+- **CLI parsing** — Replaced inline `getopt()` with `getopt_long()`-based parsing in `cli/parse.c` ([#23](https://github.com/Montimage/mmt-reader/pull/23))
+- **Output rendering** — Extracted text/JSON formatting into `cli/output.c` ([#24](https://github.com/Montimage/mmt-reader/pull/24))
+- **Color utilities** — Extracted ANSI color support into `utils/colors.c` ([#25](https://github.com/Montimage/mmt-reader/pull/25))
+- **Version handling** — Extracted version banner into `utils/version.c` ([#21](https://github.com/Montimage/mmt-reader/pull/21))
+- **Engine API** — Extracted MMT-DPI engine into `core/engine.c` with clean API ([#21](https://github.com/Montimage/mmt-reader/pull/21))
+
+### Technical Details
+
+- **Commit** `b3abcac` — Split into thin entry point with modular architecture
+- **Commit** `baa17cb` — Extract argument parsing into cli/parse.c with getopt_long and subcommand dispatch
+- **Commit** `a7ad241` — Extract output formatting into cli/output.c
+- **Commit** `40a1773` — Extract ANSI color support into utils/colors module
+- **Commit** `e68e876` — Add env vars, quiet/verbose flags, input validation
+- **Commit** `83781c0` — Add --json output format and --sessions flag
+- **Commit** `abf579b` — Wire up capture subcommand with positional interface support
+- **Commit** `57aea17` — Update man page for subcommands and new options
+- **Commit** `0be3c14` — Add config file support for default options
+- **Commit** `47da4a8` — Add anomaly detection hooks for future extension
+- **Commit** `56eafa5` — Add shell completions for bash, zsh, and fish
+
+---
+
 ## [0.1.0] — 2022-01-21
 
 ### Added
