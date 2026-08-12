@@ -3,6 +3,9 @@
 mmtReader \- deep packet inspection and per-protocol network statistics tool
 .SH SYNOPSIS
 .B mmtReader
+.RI [ GLOBAL\-OPTIONS ]
+.B mmtReader
+.RI < command >
 .RI [ OPTIONS ]
 .SH DESCRIPTION
 .B mmtReader
@@ -10,7 +13,54 @@ analyzes network traffic from pcap capture files or live network interfaces and 
 per-protocol statistics including packet counts, data volume, payload volume, and protocol
 path hierarchies. It leverages the MMT-DPI library for deep packet inspection and protocol
 classification.
-.SH OPTIONS
+
+.B mmtReader
+uses a subcommand-based interface. Available commands are:
+.RS
+.TP
+.B analyze
+Analyze a PCAP trace file for protocol identification.
+.TP
+.B capture
+Capture and analyze live network traffic from a network interface.
+.RE
+.RE
+
+.SH GLOBAL OPTIONS
+These options are available with any subcommand.
+.TP
+.B \-q, \-\-quiet
+Suppress progress output. Only final results are shown.
+.TP
+.B \-v, \-\-verbose
+Show verbose debug output to stderr (does not affect stdout output).
+.TP
+.B \-h, \-\-help
+Print help for the current command and exit.
+.TP
+.B \-V, \-\-version
+Print version information and exit.
+.TP
+.B \-x <0|1>
+Enable (1) or disable (0) IP address-based classification (default: 1).
+.TP
+.B \-y <0|1>
+Enable (1) or disable (0) hostname-based classification (default: 1).
+.TP
+.B \-z <0|1>
+Enable (1) or disable (0) port-based classification (default: 1).
+.SH COMMANDS
+.SS "mmtReader analyze"
+Analyze a PCAP trace file for protocol identification.
+
+Usage:
+.RS
+.B mmtReader analyze
+.RI [ OPTIONS ]
+.RE
+
+Options specific to
+.B analyze:
 .TP
 .B \-t, \-\-trace <file>
 Analyze a pcap capture file (offline mode). No root privileges required.
@@ -21,57 +71,90 @@ Capture traffic from a live network interface (online mode). Requires root privi
 .B \-b, \-\-buffer <MB>
 Set the pcap handler buffer size in megabytes for live capture (default: 50).
 .TP
-.B \-a, \-\-paths
+.B \-a, \-\-proto-path
 Show per-protocol-path statistics (e.g., TCP.HTTP.Google).
 .TP
-.B \-q, \-\-quiet
-Suppress progress output. Only final results are shown.
+.B \-s, \-\-sessions
+Show per-protocol session counts.
 .TP
-.B \-v, \-\-verbose
-Show verbose debug output to stderr (does not affect stdout output).
+.B \-j, \-\-json
+Output statistics in JSON format.
+.TP
+.B \-T, \-\-text
+Explicitly set text output format (default).
 .TP
 .B \-C, \-\-no-color
 Disable ANSI color output.
+.SS "mmtReader capture"
+Capture and analyze live network traffic from a network interface.
+
+Usage:
+.RS
+.B mmtReader capture
+.RI [ OPTIONS ]
+.RE
+
+Options specific to
+.B capture:
 .TP
-.B \-x <0|1>
-Enable (1) or disable (0) IP address-based classification (default: 1).
+.B \-i, \-\-interface <iface>
+Network interface to capture from (required). Can also be provided as a positional argument:
+.B mmtReader capture
+.I eth0
 .TP
-.B \-y <0|1>
-Enable (1) or disable (0) hostname-based classification (default: 1).
+.B \-b, \-\-buffer <MB>
+Set the pcap handler buffer size in megabytes for live capture (default: 50).
 .TP
-.B \-z <0|1>
-Enable (1) or disable (0) port-based classification (default: 1).
+.B \-a, \-\-proto-path
+Show per-protocol-path statistics (e.g., TCP.HTTP.Google).
 .TP
-.B \-h, \-\-help
-Print help and exit.
+.B \-s, \-\-sessions
+Show per-protocol session counts.
+.TP
+.B \-j, \-\-json
+Output statistics in JSON format.
+.TP
+.B \-T, \-\-text
+Explicitly set text output format (default).
+.TP
+.B \-C, \-\-no-color
+Disable ANSI color output.
 .SH ENVIRONMENT VARIABLES
 .TP
 .B MMTREADER_JSON
-Set to B1R to force JSON output mode.
+Set to \fB1\fR to force JSON output mode.
 .TP
 .B MMTREADER_NO_COLOR
-Set to B1R to disable color output (same as \fB\-\-no-color\fR).
+Set to \fB1\fR to disable color output (same as \fB\-\-no-color\fR).
 .TP
 .B MMTREADER_QUIET
-Set to B1\fR to enable quiet mode (same as \fB\-\-quiet\fR).
+Set to \fB1\fR to enable quiet mode (same as \fB\-\-quiet\fR).
 .br
 Command-line flags override environment variables.
 .SH EXAMPLES
 Analyze a pcap file with protocol paths:
 .IP
-.B mmtReader \-t capture.pcap \-a
+.B mmtReader analyze \-t capture.pcap \-a
 .TP
 Live capture on eth0 with a 100 MB buffer:
 .IP
-.B sudo mmtReader \-i eth0 \-b 100 \-a
+.B sudo mmtReader capture eth0 \-b 100 \-a
+.TP
+Analyze a pcap file in JSON format:
+.IP
+.B mmtReader analyze \-t capture.pcap \-j
 .TP
 Disable IP classification:
 .IP
-.B mmtReader \-t capture.pcap \-a \-x 0
+.B mmtReader analyze \-t capture.pcap \-a \-x 0
 .TP
 MMP-only mode (disable all classification):
 .IP
-.B mmtReader \-t capture.pcap \-a \-x 0 \-y 0 \-z 0
+.B mmtReader analyze \-t capture.pcap \-a \-x 0 \-y 0 \-z 0
+.TP
+Show session counts:
+.IP
+.B mmtReader analyze \-t capture.pcap \-s
 .SH OUTPUT
 At the end of execution, mmtReader prints:
 .RS
@@ -90,10 +173,7 @@ Install from: https://bitbucket.org/montimage/mmt-dpi
 .SH EXIT STATUS
 .TP
 .B 0
-Successful analysis or \fB\-\-help\fR requested.
-.TP
-.B 1
-Help was printed (legacy).
+Successful analysis or \fB\-\-help\fR/\fB\-\-version\fR requested.
 .TP
 .B 2
 Usage or validation error.
