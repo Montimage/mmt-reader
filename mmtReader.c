@@ -17,6 +17,7 @@
 # define __FAVOR_BSD
 #endif
 #include "core/engine.h"
+#include "utils/version.h"
 
 #define MAX_FILENAME_SIZE 256
 #define TRACE_FILE 1
@@ -44,6 +45,7 @@ static void usage(const char *prg_name) {
     fprintf(stderr, "\t-y <0|1>       : Hostname classification (default 1).\n");
     fprintf(stderr, "\t-z <0|1>       : Port number classification (default 1).\n");
     fprintf(stderr, "\t-h             : Prints this help.\n");
+    fprintf(stderr, "\t-V             : Prints version information.\n");
     exit(1);
 }
 
@@ -65,7 +67,7 @@ static int parseOptions(int argc, char **argv, int *type) {
     int opt;
     int optcount = 0;
 
-    while ((opt = getopt(argc, argv, "t:i:b:x:y:z:ha")) != EOF) {
+    while ((opt = getopt(argc, argv, "t:i:b:x:y:z:haV")) != EOF) {
         switch (opt) {
             case 't':
                 optcount++;
@@ -104,6 +106,9 @@ static int parseOptions(int argc, char **argv, int *type) {
                 optcount++;
                 if (optcount > 9) usage(argv[0]);
                 port_classify = atoi(optarg);
+                break;
+            case 'V':
+                version_print();
                 break;
             case 'h':
             default:
@@ -159,18 +164,13 @@ static pcap_t *init_pcap(const char *iname, uint16_t buffer_size, uint16_t snapl
 /* ------------------------------------------------------------------ */
 
 int main(int argc, char **argv) {
-    /* Banner */
-    printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
-    printf("|\t\t MONTIMAGE\n");
-    printf("|\t MMT-SDK version: %s\n", mmt_version());
-    printf("|\t %s: built %s %s\n", argv[0], __DATE__, __TIME__);
-    printf("|\t http://montimage.com\n");
-    printf("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
-
     int type = -1; /* TRACE_FILE or LIVE_INTERFACE */
 
-    /* Parse options */
+    /* Parse options (may exit on --version) */
     parseOptions(argc, argv, &type);
+
+    /* Banner (after --version check) */
+    version_banner(argv[0]);
 
     /* Create engine */
     char mmt_errbuf[1024];
