@@ -5,23 +5,31 @@
  * src port, dst port) with byte/packet counters. Reports the top
  * flows by transferred volume via flows_print_top().
  *
- * The packet parser walks Ethernet → (VLAN) → IPv4/IPv6 → TCP/UDP
- * headers and resolves ports only for TCP/UDP. ICMP/ICMPv6 and
- * other L4 protocols are aggregated per IP pair with ports set to 0.
+ * The packet parser walks Ethernet → (VLAN) → IPv4/IPv6 → (IPv6
+ * extension headers) → TCP/UDP headers and resolves ports only for
+ * TCP/UDP. ICMP/ICMPv6, ESP and other L4 protocols are aggregated per
+ * IP pair with ports set to 0.
  */
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <netinet/ip.h>
-#include <netinet/ip6.h>
-#include <netinet/tcp.h>
-#include <netinet/udp.h>
 #include "flows.h"
 
 /* ------------------------------------------------------------------ */
 /* Internal types                                                      */
 /* ------------------------------------------------------------------ */
+
+/*
+ * Header sizes, in bytes. Every header is read by explicit byte offset
+ * rather than through a struct pointer: an Ethernet frame leaves the IP
+ * header at an odd alignment (14 bytes of L2, plus 4 per VLAN tag), so
+ * casting to struct ip / ip6_hdr / tcphdr is undefined behaviour even
+ * where the hardware tolerates it.
+ */
+#define IPV4_MIN_HDR_LEN 20            /* IPv4 header without options  */
+#define IPV6_HDR_LEN     40            /* IPv6 fixed header            */
+#define L4_PORTS_LEN      4            /* src + dst port, TCP and UDP  */
 
 #define FLOW_TABLE_BITS  11            /* 2048 buckets                 */
 #define FLOW_TABLE_SIZE  (1U << FLOW_TABLE_BITS)
@@ -141,8 +149,9 @@ static void agg_packet(flows_t *f, uint8_t is_v6, const void *src, const void *d
         memcpy(ne->src6, src, 16);
         memcpy(ne->dst6, dst, 16);
     } else {
-        ne->src4 = *(const uint32_t *)src;
-        ne->dst4 = *(const uint32_t *)dst;
+        /* Raw network-order bytes, as consumed by flows_print_top() */
+        memcpy(&ne->src4, src, 4);
+        memcpy(&ne->dst4, dst, 4);
     }
     ne->next = f->buckets[bidx];
     f->buckets[bidx] = ne;
@@ -161,6 +170,33 @@ static uint16_t parse_vlan(const u_char **data, size_t *rem, uint16_t ethertype)
     return ethertype;
 }
 
+/**
+ * True for the IPv6 extension headers this parser knows how to skip.
+ *
+ * ESP (50) is deliberately absent: its payload is encrypted, so there
+ * are no readable ports behind it and stopping there is correct.
+ */
+static int is_ext_header(uint8_t proto) {
+    return proto == IPPROTO_HOPOPTS  || proto == IPPROTO_ROUTING ||
+           proto == IPPROTO_DSTOPTS  || proto == IPPROTO_FRAGMENT ||
+           proto == IPPROTO_AH;
+}
+
+/**
+ * Read the TCP/UDP source and destination ports.
+ *
+ * Both protocols carry the two ports in the first 4 bytes of the header,
+ * so a snaplen-truncated header still yields them. Ports are left
+ * untouched for any other protocol, or if fewer than 4 bytes remain.
+ */
+static void read_ports(uint8_t proto, const u_char *l4, size_t l4rem,
+                       uint16_t *sport, uint16_t *dport) {
+    if (proto != IPPROTO_TCP && proto != IPPROTO_UDP) return;
+    if (l4rem < L4_PORTS_LEN) return;
+    *sport = ((uint16_t)l4[0] << 8) | l4[1];
+    *dport = ((uint16_t)l4[2] << 8) | l4[3];
+}
+
 void flows_packet(flows_t *f, const struct pcap_pkthdr *hdr, const u_char *data) {
     if (f == NULL || hdr == NULL || data == NULL) return;
     if (hdr->caplen < 14) return;
@@ -173,61 +209,60 @@ void flows_packet(flows_t *f, const struct pcap_pkthdr *hdr, const u_char *data)
     ethertype = parse_vlan(&data, &rem, ethertype);
 
     if (ethertype == 0x0800) {      /* IPv4 */
-        if (rem < sizeof(struct ip)) return;
-        const struct ip *ip4 = (const struct ip *)data;
-        size_t ihl = (size_t)ip4->ip_hl * 4;
-        if (ihl < sizeof(struct ip) || rem < ihl) return;
+        if (rem < IPV4_MIN_HDR_LEN) return;
+        size_t ihl = (size_t)(data[0] & 0x0F) * 4;   /* IHL, in 32-bit words */
+        if (ihl < IPV4_MIN_HDR_LEN || rem < ihl) return;
 
-        uint8_t proto = ip4->ip_p;
+        uint8_t proto = data[9];
         uint16_t sport = 0, dport = 0;
         const u_char *l4 = data + ihl;
         size_t l4rem = rem - ihl;
 
-        if (proto == IPPROTO_TCP && l4rem >= sizeof(struct tcphdr)) {
-            const struct tcphdr *tcp = (const struct tcphdr *)l4;
-            sport = ntohs(tcp->th_sport);
-            dport = ntohs(tcp->th_dport);
-        } else if (proto == IPPROTO_UDP && l4rem >= sizeof(struct udphdr)) {
-            const struct udphdr *udp = (const struct udphdr *)l4;
-            sport = ntohs(udp->uh_sport);
-            dport = ntohs(udp->uh_dport);
-        }
+        read_ports(proto, l4, l4rem, &sport, &dport);
 
-        agg_packet(f, 0, &ip4->ip_src, &ip4->ip_dst, proto, sport, dport,
+        /* Addresses at offsets 12 (src) and 16 (dst), 4 bytes each */
+        agg_packet(f, 0, data + 12, data + 16, proto, sport, dport,
                    hdr->len);
 
     } else if (ethertype == 0x86dd) { /* IPv6 */
-        if (rem < sizeof(struct ip6_hdr)) return;
-        const struct ip6_hdr *ip6 = (const struct ip6_hdr *)data;
+        if (rem < IPV6_HDR_LEN) return;
 
-        uint8_t proto = ip6->ip6_nxt;
+        uint8_t proto = data[6];                     /* next header */
         uint16_t sport = 0, dport = 0;
-        const u_char *l4 = data + sizeof(struct ip6_hdr);
-        size_t l4rem = rem - sizeof(struct ip6_hdr);
+        const u_char *l4 = data + IPV6_HDR_LEN;
+        size_t l4rem = rem - IPV6_HDR_LEN;
 
         /* Skip IPv6 extension headers (basic handling) */
-        while ((proto == IPPROTO_HOPOPTS || proto == IPPROTO_ROUTING ||
-                proto == IPPROTO_DSTOPTS || proto == IPPROTO_FRAGMENT) &&
-               l4rem >= 8) {
+        while (is_ext_header(proto) && l4rem >= 8) {
             uint8_t nxt = l4[0];
-            uint16_t ext_len = ((uint16_t)l4[1] + 1) * 8;
-            if (ext_len > l4rem) return;
+            uint16_t ext_len;
+            uint16_t min_len;
+
+            if (proto == IPPROTO_FRAGMENT) {
+                /* Fixed 8 bytes; the second byte is reserved, not a length */
+                ext_len = 8;
+                min_len = 8;
+            } else if (proto == IPPROTO_AH) {
+                /* Payload Len counts 4-byte units, biased by 2 */
+                ext_len = ((uint16_t)l4[1] + 2) * 4;
+                min_len = 4;
+            } else {
+                /* Hdr Ext Len counts 8-byte units, biased by 1 */
+                ext_len = ((uint16_t)l4[1] + 1) * 8;
+                min_len = 8;
+            }
+            /* min_len also guarantees the walk makes progress */
+            if (ext_len < min_len || ext_len > l4rem) return;
+
             l4 += ext_len;
             l4rem -= ext_len;
             proto = nxt;
         }
 
-        if (proto == IPPROTO_TCP && l4rem >= sizeof(struct tcphdr)) {
-            const struct tcphdr *tcp = (const struct tcphdr *)l4;
-            sport = ntohs(tcp->th_sport);
-            dport = ntohs(tcp->th_dport);
-        } else if (proto == IPPROTO_UDP && l4rem >= sizeof(struct udphdr)) {
-            const struct udphdr *udp = (const struct udphdr *)l4;
-            sport = ntohs(udp->uh_sport);
-            dport = ntohs(udp->uh_dport);
-        }
+        read_ports(proto, l4, l4rem, &sport, &dport);
 
-        agg_packet(f, 1, &ip6->ip6_src, &ip6->ip6_dst, proto, sport, dport,
+        /* Addresses at offsets 8 (src) and 24 (dst), 16 bytes each */
+        agg_packet(f, 1, data + 8, data + 24, proto, sport, dport,
                    hdr->len);
     }
     /* Non-IP (ARP, etc.) — ignored */

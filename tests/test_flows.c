@@ -3,8 +3,9 @@
  *
  * Drives flows_packet() with synthetic Ethernet frames built as byte
  * arrays: plain IPv4/IPv6, single and stacked VLAN tags, IPv4 options,
- * TCP and UDP, plus malformed and truncated frames that must be
- * rejected without reading out of bounds.
+ * IPv6 extension-header chains, TCP and UDP, plus malformed, misaligned
+ * and truncated frames that must be handled without reading out of
+ * bounds.
  *
  * struct flows is opaque, so every assertion is made against the text
  * rendered by flows_print_top() into an in-memory stream.
@@ -15,6 +16,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -174,6 +176,48 @@ static int build_ipv6(u_char *buf, const char *src, const char *dst,
 
     l4_len = build_l4(buf, off, proto, sport, dport);
     put_be16(buf, l3 + 4, (uint16_t)(off - (l3 + 40) + l4_len));
+
+    return off + l4_len;
+}
+
+/**
+ * Build an Ethernet + IPv6 + one extension header + L4 frame, with the
+ * extension header's length byte and its real size chosen separately.
+ *
+ * This lets a test write a length byte that does not match the bytes the
+ * header actually occupies — a Fragment header's reserved byte, or an
+ * Authentication Header whose length is counted in 4-byte units.
+ *
+ * @param buf       Frame buffer
+ * @param src       Source address in presentation form
+ * @param dst       Destination address in presentation form
+ * @param ext       Extension header protocol number
+ * @param len_byte  Value written to the header's second byte
+ * @param ext_len   Bytes the extension header actually occupies
+ * @param proto     Final (L4) protocol number
+ * @param sport     Source port
+ * @param dport     Destination port
+ * @return          Total frame length
+ */
+static int build_ipv6_ext1(u_char *buf, const char *src, const char *dst,
+                           uint8_t ext, uint8_t len_byte, int ext_len,
+                           uint8_t proto, uint16_t sport, uint16_t dport) {
+    int l3 = build_eth(buf, NULL, 0, 0x86DD);
+    int off = l3 + 40;
+    int l4_len;
+
+    buf[l3]     = 0x60;                    /* version 6 */
+    buf[l3 + 6] = ext;
+    buf[l3 + 7] = 64;                      /* hop limit */
+    inet_pton(AF_INET6, src, &buf[l3 + 8]);
+    inet_pton(AF_INET6, dst, &buf[l3 + 24]);
+
+    buf[off]     = proto;
+    buf[off + 1] = len_byte;
+    off += ext_len;
+
+    l4_len = build_l4(buf, off, proto, sport, dport);
+    put_be16(buf, l3 + 4, (uint16_t)(ext_len + l4_len));
 
     return off + l4_len;
 }
@@ -642,15 +686,9 @@ static void test_ipv6_multi_ext_chain(void) {
 }
 
 /*
- * A Fragment header is a fixed 8 bytes; its second byte is reserved.
- *
- * flows.c derives every extension header's length from that byte as
- * (l4[1] + 1) * 8, which is only correct for a Fragment header when the
- * reserved byte happens to be 0. These assertions pin the ACTUAL
- * behaviour of both cases.
- *
- * TODO: flows.c:213 should special-case IPPROTO_FRAGMENT as 8 bytes
- * rather than reading the reserved byte as a header length.
+ * A Fragment header is a fixed 8 bytes and its second byte is reserved,
+ * not a header length, so the value of that byte must not change how far
+ * the walk advances.
  */
 static void test_ipv6_fragment_reserved_byte(void) {
     u_char frame[FRAME_MAX];
@@ -660,7 +698,7 @@ static void test_ipv6_fragment_reserved_byte(void) {
     int caplen = build_ipv6(frame, "2001:db8::50", "2001:db8::60", exts, 1,
                             IPPROTO_TCP, 3030, 80);
 
-    /* Reserved byte 0: the (len + 1) * 8 arithmetic lands on 8 by luck */
+    /* Reserved byte 0 */
     feed(f, frame, (uint32_t)caplen, 360);
     out = render(f, 10);
     ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::50", "3030", "2001:db8::60", "80", 360, 1),
@@ -668,13 +706,96 @@ static void test_ipv6_fragment_reserved_byte(void) {
     free(out);
     flows_destroy(f);
 
-    /* Reserved byte 1: the header length is misread as 16, skipping the ports */
+    /* Reserved byte 1: still exactly 8 bytes, so the ports are still found */
     f = flows_create();
     frame[ETH_HDR_LEN + 40 + 1] = 1;
     feed(f, frame, (uint32_t)caplen, 360);
     out = render(f, 10);
-    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::50", "0", "2001:db8::60", "0", 360, 1),
-                "Fragment header with a non-zero reserved byte loses the ports");
+    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::50", "3030", "2001:db8::60", "80", 360, 1),
+                "Fragment header with a non-zero reserved byte keeps the ports");
+    free(out);
+    flows_destroy(f);
+}
+
+/* The reserved byte is ignored whatever its value, including 0xFF */
+static void test_ipv6_fragment_nonzero_reserved(void) {
+    u_char frame[FRAME_MAX];
+    flows_t *f = flows_create();
+    char *out;
+    int caplen = build_ipv6_ext1(frame, "2001:db8::51", "2001:db8::61",
+                                 IPPROTO_FRAGMENT, 0xFF, 8,
+                                 IPPROTO_TCP, 3031, 443);
+
+    feed(f, frame, (uint32_t)caplen, 362);
+
+    out = render(f, 10);
+    ASSERT_EQ(1, count_rows(out), "Fragment header with reserved byte 0xFF records one flow");
+    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::51", "3031", "2001:db8::61", "443", 362, 1),
+                "a 0xFF reserved byte still advances exactly 8 bytes");
+
+    free(out);
+    flows_destroy(f);
+}
+
+/* A Fragment header followed by Hop-by-Hop, then TCP */
+static void test_ipv6_fragment_then_hopopts(void) {
+    u_char frame[FRAME_MAX];
+    flows_t *f = flows_create();
+    char *out;
+    uint8_t exts[2] = { IPPROTO_FRAGMENT, IPPROTO_HOPOPTS };
+    int caplen = build_ipv6(frame, "2001:db8::52", "2001:db8::62", exts, 2,
+                            IPPROTO_TCP, 3032, 8080);
+
+    /* A non-zero reserved byte in the Fragment header must not shift the chain */
+    frame[ETH_HDR_LEN + 40 + 1] = 0x2A;
+    feed(f, frame, (uint32_t)caplen, 364);
+
+    out = render(f, 10);
+    ASSERT_EQ(1, count_rows(out), "Fragment + Hop-by-Hop chain records one flow");
+    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::52", "3032", "2001:db8::62", "8080", 364, 1),
+                "the walk continues past a Fragment header into Hop-by-Hop");
+
+    free(out);
+    flows_destroy(f);
+}
+
+/* An Authentication Header is measured in 4-byte units, biased by 2 */
+static void test_ipv6_auth_header(void) {
+    u_char frame[FRAME_MAX];
+    flows_t *f = flows_create();
+    char *out;
+    /* Payload Len 4 => (4 + 2) * 4 = 24 bytes: AH with a 96-bit ICV */
+    int caplen = build_ipv6_ext1(frame, "2001:db8::53", "2001:db8::63",
+                                 IPPROTO_AH, 4, 24,
+                                 IPPROTO_TCP, 3033, 22);
+
+    feed(f, frame, (uint32_t)caplen, 366);
+
+    out = render(f, 10);
+    ASSERT_EQ(1, count_rows(out), "IPv6 with an AH header records one flow");
+    ASSERT_TRUE(has_flow(out, "tcp", "2001:db8::53", "3033", "2001:db8::63", "22", 366, 1),
+                "AH length is read in 4-byte units and the TCP ports follow it");
+
+    free(out);
+    flows_destroy(f);
+}
+
+/* ESP is encrypted: the parser must stop there rather than guess at ports */
+static void test_ipv6_esp_stops_walk(void) {
+    u_char frame[FRAME_MAX];
+    flows_t *f = flows_create();
+    char *out;
+    uint8_t exts[1] = { IPPROTO_ESP };
+    int caplen = build_ipv6(frame, "2001:db8::54", "2001:db8::64", exts, 1,
+                            IPPROTO_TCP, 3034, 80);
+
+    feed(f, frame, (uint32_t)caplen, 368);
+
+    out = render(f, 10);
+    ASSERT_EQ(1, count_rows(out), "IPv6 with ESP records one flow");
+    ASSERT_TRUE(has_flow(out, "ip", "2001:db8::54", "-", "2001:db8::64", "-", 368, 1),
+                "ESP is recorded as its own protocol with no ports");
+
     free(out);
     flows_destroy(f);
 }
@@ -773,12 +894,10 @@ static void test_truncated_frames(void) {
 }
 
 /*
- * A frame carrying a complete IPv4 header but a partial TCP header is
- * still counted, with both ports left at 0 — flows.c only reads the
- * ports when the whole 20-byte TCP header was captured, even though the
- * ports themselves are in the first 4 bytes.
+ * Both TCP and UDP carry their ports in the first 4 bytes of the header,
+ * so a snaplen-truncated capture still resolves them.
  */
-static void test_truncated_l4_keeps_flow_without_ports(void) {
+static void test_truncated_l4_still_reads_ports(void) {
     u_char frame[FRAME_MAX];
     flows_t *f = flows_create();
     char *out;
@@ -789,8 +908,72 @@ static void test_truncated_l4_keeps_flow_without_ports(void) {
 
     out = render(f, 10);
     ASSERT_EQ(1, count_rows(out), "partial TCP header still records the IP pair");
-    ASSERT_TRUE(has_flow(out, "tcp", "10.21.0.1", "0", "10.21.0.2", "0", 100, 1),
-                "partial TCP header leaves both ports at 0");
+    ASSERT_TRUE(has_flow(out, "tcp", "10.21.0.1", "1234", "10.21.0.2", "80", 100, 1),
+                "4 captured TCP bytes are enough for both ports");
+    free(out);
+    flows_destroy(f);
+
+    /* UDP truncated to exactly its 4 port bytes */
+    f = flows_create();
+    build_ipv4(frame, NULL, 0, 5, IPPROTO_UDP, "10.21.1.1", "10.21.1.2", 5353, 53);
+    feed(f, frame, ETH_HDR_LEN + 20 + 4, 100);
+
+    out = render(f, 10);
+    ASSERT_TRUE(has_flow(out, "udp", "10.21.1.1", "5353", "10.21.1.2", "53", 100, 1),
+                "4 captured UDP bytes are enough for both ports");
+
+    free(out);
+    flows_destroy(f);
+}
+
+/* One byte short of the port pair: the flow is kept, the ports are not */
+static void test_truncated_l4_below_port_pair(void) {
+    u_char frame[FRAME_MAX];
+    flows_t *f = flows_create();
+    char *out;
+    int i;
+
+    build_ipv4(frame, NULL, 0, 5, IPPROTO_TCP, "10.23.0.1", "10.23.0.2", 1234, 80);
+
+    /* 0 to 3 captured L4 bytes: no port may be read out of bounds */
+    for (i = 0; i <= 3; i++) {
+        feed(f, frame, (uint32_t)(ETH_HDR_LEN + 20 + i), 100);
+    }
+
+    out = render(f, 10);
+    ASSERT_EQ(1, count_rows(out), "L4 headers below 4 bytes still record the IP pair");
+    ASSERT_TRUE(has_flow(out, "tcp", "10.23.0.1", "0", "10.23.0.2", "0", 400, 4),
+                "fewer than 4 captured L4 bytes leave both ports at 0");
+
+    free(out);
+    flows_destroy(f);
+}
+
+/*
+ * A VLAN-tagged IPv4 frame fed from an odd address: the IP header, its
+ * addresses and the TCP ports are then misaligned for their natural
+ * types, which the byte-offset reads must handle (and which UBSan
+ * checks when the suite is built with -fsanitize=undefined).
+ */
+static void test_misaligned_ipv4_behind_vlan(void) {
+    u_char storage[FRAME_MAX + 1];
+    /* Offset the frame so its first byte sits at an odd address */
+    u_char *frame = storage + (((uintptr_t)storage & 1u) ? 0 : 1);
+    flows_t *f = flows_create();
+    char *out;
+    uint16_t tpids[1] = { 0x8100 };
+    int caplen = build_ipv4(frame, tpids, 1, 5, IPPROTO_TCP,
+                            "10.24.0.1", "10.24.0.2", 1234, 80);
+
+    ASSERT_TRUE(((uintptr_t)(frame + ETH_HDR_LEN + 4) & 3u) != 0,
+                "the VLAN-shifted IPv4 header is not 4-byte aligned");
+
+    feed(f, frame, (uint32_t)caplen, 260);
+
+    out = render(f, 10);
+    ASSERT_EQ(1, count_rows(out), "a misaligned VLAN + IPv4 frame records one flow");
+    ASSERT_TRUE(has_flow(out, "tcp", "10.24.0.1", "1234", "10.24.0.2", "80", 260, 1),
+                "a misaligned IPv4 header is parsed correctly");
 
     free(out);
     flows_destroy(f);
@@ -924,11 +1107,17 @@ int main(void) {
     test_ipv6_hopopts_chain();
     test_ipv6_multi_ext_chain();
     test_ipv6_fragment_reserved_byte();
+    test_ipv6_fragment_nonzero_reserved();
+    test_ipv6_fragment_then_hopopts();
+    test_ipv6_auth_header();
+    test_ipv6_esp_stops_walk();
     test_ipv6_ext_past_caplen();
     test_ipv6_truncated_header();
     test_non_ip_ethertype();
     test_truncated_frames();
-    test_truncated_l4_keeps_flow_without_ports();
+    test_truncated_l4_still_reads_ports();
+    test_truncated_l4_below_port_pair();
+    test_misaligned_ipv4_behind_vlan();
     test_null_arguments();
     test_print_top_n_and_ordering();
     test_flow_table_cap();
