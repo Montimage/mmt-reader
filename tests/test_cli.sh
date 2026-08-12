@@ -27,11 +27,11 @@ assert_output_contains() {
     local needle="$2"
     local haystack="$3"
     TOTAL=$((TOTAL + 1))
-    if echo "$haystack" | grep -qF "$needle"; then
+    if grep -qF "$needle" <<< "$haystack"; then
         PASS=$((PASS + 1))
     else
         echo "FAIL [$desc]: output does not contain '$needle'"
-        echo "  Output: $(echo "$haystack" | head -3)"
+        echo "  Output: $(head -3 <<< "$haystack")"
         FAIL=$((FAIL + 1))
     fi
 }
@@ -41,7 +41,7 @@ assert_output_not_contains() {
     local needle="$2"
     local haystack="$3"
     TOTAL=$((TOTAL + 1))
-    if ! echo "$haystack" | grep -qF "$needle"; then
+    if ! grep -qF "$needle" <<< "$haystack"; then
         PASS=$((PASS + 1))
     else
         echo "FAIL [$desc]: output should NOT contain '$needle'"

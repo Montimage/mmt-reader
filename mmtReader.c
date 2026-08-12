@@ -147,12 +147,23 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
 
-        while ((data = pcap_next(pcap, &p_pkthdr)) != NULL && !got_signal) {
-            header.ts = p_pkthdr.ts;
-            header.caplen = p_pkthdr.caplen;
-            header.len = p_pkthdr.len;
-            if (!engine_process_packet(eng, &header, data)) {
-                fprintf(stderr, "Packet data extraction failure.\n");
+        {
+            int pkt_count = 0;
+            while ((data = pcap_next(pcap, &p_pkthdr)) != NULL && !got_signal) {
+                pkt_count++;
+                if (opts.verbose) {
+                    fprintf(stderr, "DEBUG: processing packet #%d (%d bytes)\n",
+                            pkt_count, (int)p_pkthdr.caplen);
+                }
+                header.ts = p_pkthdr.ts;
+                header.caplen = p_pkthdr.caplen;
+                header.len = p_pkthdr.len;
+                if (!engine_process_packet(eng, &header, data)) {
+                    fprintf(stderr, "Packet data extraction failure.\n");
+                }
+            }
+            if (opts.verbose) {
+                fprintf(stderr, "DEBUG: processed %d packets\n", pkt_count);
             }
         }
         pcap_close(pcap);

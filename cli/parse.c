@@ -12,6 +12,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include "parse.h"
 
 /* ------------------------------------------------------------------ */
@@ -226,6 +227,10 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
                 fprintf(stderr, "Error: trace file path too long\n");
                 parse_error(prog_name);
             }
+            if (access(optarg, F_OK) != 0) {
+                fprintf(stderr, "Error: file not found: %s\n", optarg);
+                parse_error(prog_name);
+            }
             opts->input = optarg;
             opts->mode  = 1; /* TRACE_FILE */
             has_input   = 1;
@@ -332,8 +337,7 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
         } else if (subcmd == SUBCMD_CAPTURE) {
             parse_validate_error(prog_name, "missing --interface name");
         } else {
-            fprintf(stderr, "Error: missing required option\n");
-            fprintf(stderr, "Use --help for usage information\n");
+            parse_validate_error(prog_name, "missing required option");
         }
         parse_error(prog_name);
     }
@@ -348,6 +352,5 @@ void parse_error(const char *prog_name) {
 
 void parse_validate_error(const char *prog_name, const char *msg) {
     fprintf(stderr, "Error: %s\n", msg);
-    /* Print relevant help section based on subcommand context */
-    (void)prog_name;
+    fprintf(stderr, "Use \"%s --help\" for usage information\n", prog_name);
 }
