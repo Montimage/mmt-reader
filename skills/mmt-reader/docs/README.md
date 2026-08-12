@@ -7,7 +7,7 @@
 
 # mmtReader — Network Traffic Analysis
 
-> Analyze network traffic and answer questions about pcap captures or live interfaces using mmtReader.
+> Analyze pcap files or live interfaces with the mmtReader DPI CLI, turning protocol stats into plain-language answers about traffic mix, bandwidth, sessions, and packet counts.
 
 ## Highlights
 
@@ -24,7 +24,7 @@
 | "What protocols are in this capture?" | Run mmtReader on the pcap file and summarize protocol distribution |
 | "Which service uses the most bandwidth?" | Analyze traffic and report top protocols by data volume |
 | "Analyze this .pcap file" | Execute mmtReader analyze and translate output into a clear report |
-| "How much traffic is on port 443?" | Run classification-aware analysis and report port-based stats |
+| "Show me the protocol hierarchy in this capture" | Report the full DPI path breakdown (e.g. `ethernet.ip.tcp.http`) |
 
 ## How It Works
 
@@ -54,7 +54,7 @@ Example prompt: "Analyze this pcap file at /path/to/capture.pcap and tell me whi
 
 | Path | Description |
 |---|---|
-| `references/` | Common question patterns and command mappings |
+| `references/` | Installation, JSON output shape, classification flags, and question-to-command mappings |
 | `docs/` | Human-readable documentation (not auto-loaded) |
 
 ## Output
