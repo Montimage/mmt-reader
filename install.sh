@@ -267,10 +267,8 @@ else
         run "cd '${MMT_DPI_BUILD_DIR}' && make VERSION=${MMT_DPI_VERSION} GIT_VERSION=${MMT_DPI_GIT_VERSION} MMT_BASE=${MMT_BASE} install"
 
         # Run ldconfig
-        if [[ ! $DRY_RUN ]]; then
-            echo "${MMT_DPI_LIB}" > /etc/ld.so.conf.d/mmt-dpi.conf
-            ldconfig
-        fi
+        run "echo '${MMT_DPI_LIB}' > /etc/ld.so.conf.d/mmt-dpi.conf"
+        run "ldconfig"
 
         info "MMT-DPI built and installed to ${MMT_DPI_DIR}."
 
@@ -278,10 +276,8 @@ else
         # Use pre-built MMT-DPI at custom path
         info "Using pre-built MMT-DPI from ${MMT_DPI_PATH}"
         run "cp -r '${MMT_DPI_PATH}/include' '${MMT_DPI_PATH}/lib' '${MMT_DPI_DIR}/'"
-        if [[ ! $DRY_RUN ]]; then
-            echo "${MMT_DPI_LIB}" > /etc/ld.so.conf.d/mmt-dpi.conf
-            ldconfig
-        fi
+        run "echo '${MMT_DPI_LIB}' > /etc/ld.so.conf.d/mmt-dpi.conf"
+        run "ldconfig"
         info "MMT-DPI installed from ${MMT_DPI_PATH}."
 
     elif [[ -f "${MMT_DPI_SRC}/sdk/mmt-dpi_*.deb" ]]; then
@@ -324,14 +320,18 @@ CFLAGS="-g -O2"
 # All source files (matches Makefile)
 SRCS="mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c flows.c config.c"
 
-if ! ${CC} ${CFLAGS} -o mmtReader ${SRCS} \
+if $DRY_RUN; then
+    echo -e "${YELLOW}[DRY-RUN]${NC} ${CC} ${CFLAGS} -o mmtReader ${SRCS} -I\".\" -I\"${MMT_DPI_INC}\" -I\"./utils\" -I\"./cli\" -L\"${MMT_DPI_LIB}\" -lmmt_core -ldl -lpcap"
+    info "mmtReader would be compiled (dry-run)."
+elif ! ${CC} ${CFLAGS} -o mmtReader ${SRCS} \
         -I"." -I"${MMT_DPI_INC}" -I"./utils" -I"./cli" \
         -L"${MMT_DPI_LIB}" \
         -lmmt_core -ldl -lpcap; then
     error "Compilation failed. Check your MMT-DPI installation."
     exit 1
+else
+    info "Compiled mmtReader."
 fi
-info "Compiled mmtReader."
 
 # ─── Phase 4: Install mmtReader ───────────────────────────
 step "Phase 4: Installing mmtReader..."
