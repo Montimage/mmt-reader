@@ -70,7 +70,12 @@ test: build
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_wifi && rm -f test_wifi
 	@echo ""
-	@echo "=== Test 8: Completions exist ==="
+	@echo "=== Test 8: Flow aggregation unit tests ==="
+	gcc -g -o test_flows tests/test_flows.c flows.c \
+		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
+		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_flows && rm -f test_flows
+	@echo ""
+	@echo "=== Test 9: Completions exist ==="
 	@test -f completions/mmtReader.bash && echo "Bash completion OK" || echo "Bash completion missing"
 	@test -f completions/mmtReader.zsh && echo "Zsh completion OK" || echo "Zsh completion missing"
 	@test -f completions/mmtReader.fish && echo "Fish completion OK" || echo "Fish completion missing"
