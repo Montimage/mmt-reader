@@ -5,6 +5,7 @@
  *
  * Core DPI logic (handler init, packet processing, statistics)
  * is encapsulated in core/engine.h.
+ * Argument parsing and subcommand dispatch are in cli/parse.h.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,36 +19,9 @@
 #endif
 #include "core/engine.h"
 #include "utils/version.h"
+#include "cli/parse.h"
 
-#define MAX_FILENAME_SIZE 256
-#define TRACE_FILE 1
-#define LIVE_INTERFACE 2
-
-static char filename[MAX_FILENAME_SIZE + 1];
-static int pcap_bs = 50; /* default 50 MB buffer */
-static int ip_address_classify = 1;
-static int hostname_classify = 1;
-static int port_classify = 1;
 static volatile sig_atomic_t got_signal = 0;
-
-/* ------------------------------------------------------------------ */
-/* Help / usage                                                        */
-/* ------------------------------------------------------------------ */
-
-static void usage(const char *prg_name) {
-    fprintf(stderr, "%s [<option>]\n", prg_name);
-    fprintf(stderr, "Option:\n");
-    fprintf(stderr, "\t-t <trace file>: Gives the trace file to analyse.\n");
-    fprintf(stderr, "\t-i <interface> : Gives the interface name for live traffic analysis.\n");
-    fprintf(stderr, "\t-b <value>     : Set buffer for pcap handler (MB, default 50).\n");
-    fprintf(stderr, "\t-a             : Show protocol statistic for each protocol path.\n");
-    fprintf(stderr, "\t-x <0|1>       : IP address classification (default 1).\n");
-    fprintf(stderr, "\t-y <0|1>       : Hostname classification (default 1).\n");
-    fprintf(stderr, "\t-z <0|1>       : Port number classification (default 1).\n");
-    fprintf(stderr, "\t-h             : Prints this help.\n");
-    fprintf(stderr, "\t-V             : Prints version information.\n");
-    exit(1);
-}
 
 /* ------------------------------------------------------------------ */
 /* Signal handler                                                      */
@@ -57,76 +31,6 @@ static void signal_handler(int type) {
     printf("\nINFO: reception of signal %d\n", type);
     got_signal = 1;
     fflush(stderr);
-}
-
-/* ------------------------------------------------------------------ */
-/* Argument parsing                                                    */
-/* ------------------------------------------------------------------ */
-
-static int parseOptions(int argc, char **argv, int *type) {
-    int opt;
-    int optcount = 0;
-
-    while ((opt = getopt(argc, argv, "t:i:b:x:y:z:haV")) != EOF) {
-        switch (opt) {
-            case 't':
-                optcount++;
-                if (optcount > 6) usage(argv[0]);
-                strncpy(filename, optarg, MAX_FILENAME_SIZE);
-                *type = TRACE_FILE;
-                break;
-            case 'i':
-                optcount++;
-                if (optcount > 6) usage(argv[0]);
-                strncpy(filename, optarg, MAX_FILENAME_SIZE);
-                *type = LIVE_INTERFACE;
-                break;
-            case 'b':
-                optcount++;
-                if (optcount > 6) usage(argv[0]);
-                pcap_bs = atoi(optarg);
-                if (pcap_bs <= 0) pcap_bs = 50;
-                break;
-            case 'a':
-                optcount++;
-                if (optcount > 6) usage(argv[0]);
-                /* proto_path_detail is handled by engine */
-                break;
-            case 'x':
-                optcount++;
-                if (optcount > 9) usage(argv[0]);
-                ip_address_classify = atoi(optarg);
-                break;
-            case 'y':
-                optcount++;
-                if (optcount > 9) usage(argv[0]);
-                hostname_classify = atoi(optarg);
-                break;
-            case 'z':
-                optcount++;
-                if (optcount > 9) usage(argv[0]);
-                port_classify = atoi(optarg);
-                break;
-            case 'V':
-                version_print();
-                break;
-            case 'h':
-            default:
-                usage(argv[0]);
-        }
-    }
-
-    if (filename[0] == '\0') {
-        if (*type == TRACE_FILE) {
-            fprintf(stderr, "Missing trace file name\n");
-        }
-        if (*type == LIVE_INTERFACE) {
-            fprintf(stderr, "Missing network interface name\n");
-        }
-        usage(argv[0]);
-    }
-
-    return 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -164,12 +68,27 @@ static pcap_t *init_pcap(const char *iname, uint16_t buffer_size, uint16_t snapl
 /* ------------------------------------------------------------------ */
 
 int main(int argc, char **argv) {
-    int type = -1; /* TRACE_FILE or LIVE_INTERFACE */
+    cli_options_t opts;
 
-    /* Parse options (may exit on --version) */
-    parseOptions(argc, argv, &type);
+    /* Parse options (may exit on --version or --help) */
+    int rc = parse_options(argc, argv, &opts);
+    if (rc != PARSE_EXIT_OK) {
+        return EXIT_FAILURE;
+    }
 
-    /* Banner (after --version check) */
+    /* If --version was requested, print banner + version and exit */
+    if (opts.mode == 3) {
+        version_banner(argv[0]);
+        version_print();
+        return EXIT_SUCCESS;
+    }
+
+    /* If --help was shown, skip the rest */
+    if (opts.show_help) {
+        return EXIT_SUCCESS;
+    }
+
+    /* Banner (after --version/--help check) */
     version_banner(argv[0]);
 
     /* Create engine */
@@ -181,21 +100,24 @@ int main(int argc, char **argv) {
     }
 
     /* Configure classification */
-    engine_set_ip_classify(eng, ip_address_classify);
-    engine_set_hostname_classify(eng, hostname_classify);
-    engine_set_port_classify(eng, port_classify);
+    engine_set_ip_classify(eng, opts.ip_classify);
+    engine_set_hostname_classify(eng, opts.hostname_classify);
+    engine_set_port_classify(eng, opts.port_classify);
+
+    /* Enable per-protocol-path detail if requested */
+    engine_set_proto_path_detail(eng, opts.proto_path);
 
     /* Set up signal handling */
     signal(SIGINT, signal_handler);
 
-    /* Process packets */
-    if (type == TRACE_FILE) {
+    /* Dispatch based on mode */
+    if (opts.mode == 1) {
         /* OFFLINE mode: read from pcap file */
         struct pcap_pkthdr p_pkthdr;
         const u_char *data;
         struct pkthdr header;
 
-        pcap_t *pcap = pcap_open_offline(filename, mmt_errbuf);
+        pcap_t *pcap = pcap_open_offline(opts.input, mmt_errbuf);
         if (!pcap) {
             fprintf(stderr, "[error] pcap_open failed: %s\n", mmt_errbuf);
             engine_destroy(eng);
@@ -212,17 +134,17 @@ int main(int argc, char **argv) {
         }
         pcap_close(pcap);
 
-    } else if (type == LIVE_INTERFACE) {
+    } else if (opts.mode == 2) {
         /* ONLINE mode: live capture from interface */
         pcap_t *pcap;
 
-        if (pcap_bs == 50) {
+        if (opts.buffer_mb == 50) {
             printf("INFO: Use default buffer size: 50 (MB)\n");
         } else {
-            printf("INFO: Use buffer size: %d (MB)\n", pcap_bs);
+            printf("INFO: Use buffer size: %d (MB)\n", opts.buffer_mb);
         }
 
-        pcap = init_pcap(filename, (uint16_t)pcap_bs, 65535);
+        pcap = init_pcap(opts.input, (uint16_t)opts.buffer_mb, 65535);
         if (!pcap) {
             fprintf(stderr, "[error] Creating pcap handle failed\n");
             engine_destroy(eng);
@@ -233,7 +155,8 @@ int main(int argc, char **argv) {
         pcap_close(pcap);
 
     } else {
-        usage(argv[0]);
+        /* Should not reach here — parse_options validates input */
+        parse_error(argv[0]);
     }
 
     /* Cleanup */
