@@ -1,0 +1,14 @@
+review:
+  max_cycles: 3
+  auto_merge: false
+  confidence_threshold: 80
+  run_tests: true
+  check_ci: true
+  ci_poll_interval: 30
+  ci_timeout: 600
+  test_timeout: 300
+  soft_pass: true
+  require_acceptance_criteria_check: true
+  require_traceability_check: true
+  traceability_exempt_labels: ["refactor", "chore"]
+  traceability_exempt_pattern: "^\\s*Type:\\s*(refactor|chore)\\s*$"

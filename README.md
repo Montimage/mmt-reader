@@ -1,6 +1,7 @@
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux-blue)
 ![Language](https://img.shields.io/badge/language-C-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)
 
 # Ask about network traffic. Get clear answers.
 
