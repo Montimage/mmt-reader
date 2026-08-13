@@ -34,7 +34,7 @@ sequenceDiagram
     Human->>Agent: Which services use the most bandwidth?
     Agent->>Reader: ./mmtReader analyze -t capture.pcap -a --json
     Reader-->>Agent: {protocols: [{name: HTTP, ...}, ...]}
-    Agent->>Human: HTTP dominates at 57% of traffic (1.05 MB)
+    Agent->>Human: HTTP dominates at 37% of traffic (5.29 MB)
 ```
 
 ## Architecture
@@ -73,38 +73,41 @@ sequenceDiagram
 **Raw mmtReader output (what the Agent receives):**
 
 ```
-MMT-SDK 1.0.0 - Montimage
-Build: Jul 22 2025 14:32:01
+MMT-SDK 1.8.0 (42cac8b7) - Montimage
+Build: Aug 12 2026 18:32:44
 
 Protocol Statistics (with path):
-  HTTP          :  1053 pkts,  1053910 data bytes,   453910 payload bytes
-    TCP.HTTP    :  1053 pkts,  1053910 data bytes,   453910 payload bytes
-  DNS           :   417 pkts,    31400 data bytes,     31400 payload bytes
-    UDP.DNS     :   417 pkts,     31400 data bytes,      31400 payload bytes
-  TLS           :   347 pkts,   101413 data bytes,    101413 payload bytes
-    TCP.TLS     :   347 pkts,    101413 data bytes,     101413 payload bytes
-  ICMP          :    44 pkts,     2752 data bytes,       2752 payload bytes
-    ICMP        :    44 pkts,      2752 data bytes,        2752 payload bytes
+  HTTP          :  5287 pkts,  5967094 data bytes,  5681596 payload bytes
+    TCP.HTTP    :  5287 pkts,  5967094 data bytes,  5681596 payload bytes
+  MSN           :  3735 pkts,  4259140 data bytes,  4057450 payload bytes
+    TCP.MSN     :  3735 pkts,  4259140 data bytes,  4057450 payload bytes
+  SSL           :  3090 pkts,  2771386 data bytes,  2604526 payload bytes
+    TCP.SSL     :  3090 pkts,  2771386 data bytes,  2604526 payload bytes
+  DNS           :   87 pkts,    15154 data bytes,     15154 payload bytes
+    UDP.DNS     :   87 pkts,    15154 data bytes,     15154 payload bytes
+  ICMP          :   34 pkts,     5078 data bytes,      5078 payload bytes
+    ICMP        :   34 pkts,     5078 data bytes,      5078 payload bytes
 
 Protocol Statistics:
-  HTTP          :  1053 pkts,  1053910 data bytes,   453910 payload bytes
-  DNS           :   417 pkts,    31400 data bytes,     31400 payload bytes
-  TLS           :   347 pkts,   101413 data bytes,    101413 payload bytes
-  ICMP          :    44 pkts,     2752 data bytes,       2752 payload bytes
+  HTTP          :  5287 pkts,  5967094 data bytes,  5681596 payload bytes
+  MSN           :  3735 pkts,  4259140 data bytes,  4057450 payload bytes
+  SSL           :  3090 pkts,  2771386 data bytes,  2604526 payload bytes
+  DNS           :   87 pkts,    15154 data bytes,     15154 payload bytes
+  ICMP          :   34 pkts,     5078 data bytes,      5078 payload bytes
 
 Input Statistics:
-  Packets      :  1861 packets
-  Data Volume  :  1189475 bytes
-  IPv4 Sessions:  142 sessions
-  Protocols    :  4 protocols
-  Duration     :  10.0 seconds
-  Bandwidth    :  118947 bytes/sec
-  PPS          :  186.1 packets/sec
+  Packets      :  14261 packets
+  Data Volume  :  9216531 bytes
+  Total Sessions: 679 sessions
+  Protocols    :  28 protocols
+  Duration     :  299 seconds
+  Bandwidth    :  30875.60 bytes/sec
+  PPS          :  47.77 packets/sec
 ```
 
 **What the Agent tells the user:**
 
-> "The capture contains 1,861 packets over 10 seconds (186 pps). HTTP is the dominant protocol with 1,053 packets (57% of traffic). DNS accounts for 417 packets, TLS for 347, and ICMP for 44. There are 142 IPv4 sessions across 4 protocols."
+> "The capture contains 14,261 packets over 299 seconds (47.77 pps). HTTP is the dominant protocol with 5,287 packets (37% of traffic). MSN Messenger is second at 3,735 packets (26%). SSL/TLS accounts for 3,090 packets (22%). DNS has 87 packets, ICMP has 34. There are 679 total sessions across 28 protocols."
 
 ## Key Features
 
@@ -150,15 +153,85 @@ sudo ./install.sh
 
 ```
 Protocol Statistics (with path):
-  HTTP          :  1053 pkts,  1053910 data bytes,   453910 payload bytes
-    TCP.HTTP    :  1053 pkts,  1053910 data bytes,   453910 payload bytes
-  DNS           :   417 pkts,   31400 data bytes,    31400 payload bytes
-    UDP.DNS     :   417 pkts,    31400 data bytes,     31400 payload bytes
-  TLS           :   347 pkts,   101413 data bytes,    101413 payload bytes
-    TCP.TLS     :   347 pkts,    101413 data bytes,     101413 payload bytes
-  ICMP          :    44 pkts,     2752 data bytes,      2752 payload bytes
-    ICMP        :    44 pkts,      2752 data bytes,       2752 payload bytes
+  HTTP          :  5287 pkts,  5967094 data bytes,  5681596 payload bytes
+    TCP.HTTP    :  5287 pkts,  5967094 data bytes,  5681596 payload bytes
+  MSN           :  3735 pkts,  4259140 data bytes,  4057450 payload bytes
+    TCP.MSN     :  3735 pkts,  4259140 data bytes,  4057450 payload bytes
+  SSL           :  3090 pkts,  2771386 data bytes,  2604526 payload bytes
+    TCP.SSL     :  3090 pkts,  2771386 data bytes,  2604526 payload bytes
+  DNS           :   87 pkts,    15154 data bytes,     15154 payload bytes
+    UDP.DNS     :   87 pkts,    15154 data bytes,     15154 payload bytes
+  ICMP          :   34 pkts,     5078 data bytes,      5078 payload bytes
+    ICMP        :   34 pkts,     5078 data bytes,      5078 payload bytes
 ```
+
+**Question:** "How much traffic is on port 443?"
+
+```bash
+# Agent runs with port classification:
+./mmtReader analyze -t capture.pcap -a -z 1
+```
+
+**Question:** "Show me the data in JSON for my dashboard:"
+
+```bash
+# Agent runs with JSON output:
+./mmtReader analyze -t capture.pcap --json -a
+```
+
+**JSON output the Agent receives:**
+
+```json
+{
+  "version": "1.8.0 (42cac8b7)",
+  "input_stats": {
+    "packets": 14261,
+    "data_volume": 9216531,
+    "duration_seconds": 298.51,
+    "bandwidth_bytes_per_sec": 30875.60,
+    "packets_per_sec": 47.77,
+    "total_sessions": 679,
+    "protocols": 28
+  },
+  "protocol_paths": [
+    {"packets": 5287, "data_volume": 5967094, "payload_volume": 5681596, "path": "ethernet.ip.tcp.http"},
+    {"packets": 3735, "data_volume": 4259140, "payload_volume": 4057450, "path": "ethernet.ip.tcp.msn"},
+    {"packets": 3090, "data_volume": 2771386, "payload_volume": 2604526, "path": "ethernet.ip.tcp.ssl"},
+    {"packets": 87, "data_volume": 15154, "payload_volume": 15154, "path": "ethernet.ip.udp.dns"},
+    {"packets": 34, "data_volume": 5078, "payload_volume": 3922, "path": "ethernet.ip.icmp"}
+  ],
+  "protocols": [
+    {"name": "http", "packets": 5287, "data_volume": 5967094, "payload_volume": 5681596},
+    {"name": "msn", "packets": 3735, "data_volume": 4259140, "payload_volume": 4057450},
+    {"name": "ssl", "packets": 3090, "data_volume": 2771386, "payload_volume": 2604526},
+    {"name": "dns", "packets": 87, "data_volume": 15154, "payload_volume": 15154},
+    {"name": "icmp", "packets": 34, "data_volume": 5078, "payload_volume": 3922}
+  ],
+  "anomalies": []
+}
+```
+
+**Live monitoring:**
+
+```bash
+# Agent triggers live capture (Ethernet):
+sudo ./mmtReader capture -i eth0 -a -b 100
+
+# Or on a WiFi interface:
+sudo ./mmtReader capture -i wlP9s9 -a -s
+```
+
+**Classification flags the Agent can toggle:**
+
+| Flag | Classification | Default | Use case |
+|------|---------------|---------|----------|
+| `-x` | IP address classification | On | Identify services by IP |
+| `-y` | Hostname (SNI) classification | On | Identify by domain name |
+| `-z` | Port number classification | On | Identify by port |
+| `-a` | Show protocol paths | Off | Full hierarchy (TCP.HTTP) |
+| `-s` | Session counts | Off | Per-protocol session tracking |
+| `--json` | JSON output | Off | Machine-readable output |
+| `-F N` | Top flows (capture only) | Off | Report top N sessions by volume |
 
 **Question:** "How much traffic is on port 443?"
 
@@ -178,31 +251,31 @@ Protocol Statistics (with path):
 
 ```json
 {
-  "protocols": [
-    {
-      "name": "HTTP",
-      "packets_count": 1053,
-      "data_volume": 1053910,
-      "payload_volume": 453910,
-      "sessions": 142
-    },
-    {
-      "name": "DNS",
-      "packets_count": 417,
-      "data_volume": 31400,
-      "payload_volume": 31400,
-      "sessions": 0
-    }
-  ],
+  "version": "1.8.0 (42cac8b7)",
   "input_stats": {
-    "packets": 1861,
-    "data_volume": 1189475,
-    "nb_ipv4_sessions": 142,
-    "nb_protocols": 4,
-    "duration": 10.0,
-    "bandwidth": 118947.5,
-    "pps": 186.1
-  }
+    "packets": 14261,
+    "data_volume": 9216531,
+    "duration_seconds": 298.51,
+    "bandwidth_bytes_per_sec": 30875.60,
+    "packets_per_sec": 47.77,
+    "total_sessions": 679,
+    "protocols": 28
+  },
+  "protocol_paths": [
+    {"packets": 5287, "data_volume": 5967094, "payload_volume": 5681596, "path": "ethernet.ip.tcp.http"},
+    {"packets": 3735, "data_volume": 4259140, "payload_volume": 4057450, "path": "ethernet.ip.tcp.msn"},
+    {"packets": 3090, "data_volume": 2771386, "payload_volume": 2604526, "path": "ethernet.ip.tcp.ssl"},
+    {"packets": 87, "data_volume": 15154, "payload_volume": 15154, "path": "ethernet.ip.udp.dns"},
+    {"packets": 34, "data_volume": 5078, "payload_volume": 3922, "path": "ethernet.ip.icmp"}
+  ],
+  "protocols": [
+    {"name": "http", "packets": 5287, "data_volume": 5967094, "payload_volume": 5681596},
+    {"name": "msn", "packets": 3735, "data_volume": 4259140, "payload_volume": 4057450},
+    {"name": "ssl", "packets": 3090, "data_volume": 2771386, "payload_volume": 2604526},
+    {"name": "dns", "packets": 87, "data_volume": 15154, "payload_volume": 15154},
+    {"name": "icmp", "packets": 34, "data_volume": 5078, "payload_volume": 3922}
+  ],
+  "anomalies": []
 }
 ```
 
@@ -210,10 +283,10 @@ Protocol Statistics (with path):
 
 ```bash
 # Agent triggers live capture (Ethernet):
-sudo ./mmtReader capture eth0 -a -b 100
+sudo ./mmtReader capture -i eth0 -a -b 100
 
 # Or on a WiFi interface:
-sudo ./mmtReader capture wlP9s9 -a -s
+sudo ./mmtReader capture -i wlP9s9 -a -s
 ```
 
 **Classification flags the Agent can toggle:**
@@ -231,10 +304,11 @@ sudo ./mmtReader capture wlP9s9 -a -s
 
 | | mmtReader | Raw pcap analysis | Wireshark |
 |---|---|---|---|
-| Natural language input | Yes | No | No |
+| Natural language input | Yes (via AI) | No | No |
 | AI-ready output | JSON + text | Raw bytes | GUI only |
 | Protocol paths | `-a` flag | Manual filtering | Manual filtering |
 | Session tracking | `-s` flag | Manual | Manual |
+| Top flows | `-F N` flag | Manual | Manual |
 | Root required (live) | Yes | Yes | Yes |
 | WiFi support | Yes (auto-convert) | No | No |
 
@@ -246,11 +320,15 @@ The agent constructs the appropriate mmtReader command based on the question, ru
 
 **Can I use mmtReader without an AI Agent?**
 
-Yes. It is a standard CLI tool. Run `./mmtReader analyze -t file.pcap -a` for protocol stats, or `./mmtReader capture eth0 -a` for live monitoring.
+Yes. It is a standard CLI tool. Run `./mmtReader analyze -t file.pcap -a` for protocol stats, or `sudo ./mmtReader capture -i eth0 -a` for live monitoring.
 
 **What traffic types are supported?**
 
 Ethernet (DLT_EN10MB) and WiFi (802.11) traffic. WiFi frames are automatically converted to Ethernet format for DPI processing. Both IPv4 and IPv6 are tracked.
+
+**Does mmtReader require root?**
+
+Only for live capture (`capture` subcommand). Analyzing pcap files (`analyze` subcommand) works without root privileges.
 
 ## Get Started
 
@@ -269,9 +347,9 @@ Analyze a pcap file:
 Live capture:
 
 ```bash
-sudo ./mmtReader capture eth0 -a
+sudo ./mmtReader capture -i eth0 -a
 # or WiFi:
-sudo ./mmtReader capture wlP9s9 -a
+sudo ./mmtReader capture -i wlP9s9 -a
 ```
 
 [**User Guide ->**](docs/USER_GUIDE.md) · [**Architecture ->**](docs/ARCHITECTURE.md) · [**Development ->**](docs/DEVELOPMENT.md) · Apache 2.0 Licensed
@@ -428,12 +506,11 @@ MMT-Reader uses a subcommand-based interface. Available commands:
 | `-v, --verbose` | None | 0 | Verbose debug output to stderr |
 | `-h, --help` | None | — | Print help and exit |
 | `-V, --version` | None | — | Print version and exit |
+| `-c, --config <file>` | Path | `~/.mmtreader.conf` | Config file for default options |
+| `-C, --no-color` | None | 0 | Disable ANSI color output |
 | `-x <0|1>` | `1` = enable, `0` = disable | 1 | IP address classification |
 | `-y <0|1>` | `1` = enable, `0` = disable | 1 | Hostname classification |
 | `-z <0|1>` | `1` = enable, `0` = disable | 1 | Port number classification |
-| `-j, --json` | None | 0 | JSON output format |
-| `-T, --text` | None | 0 | Explicit text output (default) |
-| `-C, --no-color` | None | 0 | Disable ANSI color output |
 
 > **Note:** `-x`, `-y`, and `-z` are hidden from `--help` but fully functional.
 
@@ -446,23 +523,26 @@ MMT-Reader uses a subcommand-based interface. Available commands:
 | Flag | Argument | Description |
 |------|----------|-------------|
 | `-t, --trace <file>` | Path to pcap file | **Required** — analyze a pcap capture file |
-| `-b, --buffer <MB>` | Buffer size in MB | For live capture (default: 50) |
+| `-i, --interface <iface>` | Interface name | Live network interface (alternative to `-t`) |
+| `-b, --buffer <MB>` | Buffer size in MB | Pcap handler buffer (default: 50) |
 | `-a, --proto-path` | None | Show per-protocol-path statistics |
 | `-s, --sessions` | None | Show per-protocol session counts |
 | `-j, --json` | None | JSON output format |
+| `-T, --text` | None | Explicit text output (default) |
+| `-c, --config <file>` | Path | Config file (default: `~/.mmtreader.conf`) |
+| `-C, --no-color` | None | Disable ANSI color output |
 
 No root privileges required. Reads and replays traffic deterministically.
 
 #### `capture` Subcommand
 
 ```bash
-./mmtReader capture [OPTIONS] [interface]
+./mmtReader capture [OPTIONS]
 ```
 
 | Flag | Argument | Description |
 |------|----------|-------------|
-| `-i, --interface <iface>` | Interface name | Network interface to capture from |
-| `interface` (positional) | Interface name | Alternative: `mmtReader capture eth0` |
+| `-i, --interface <iface>` | Interface name | **Required** — network interface to capture from |
 | `-b, --buffer <MB>` | Buffer size in MB | Pcap handler buffer (default: 50) |
 | `-a, --proto-path` | None | Show per-protocol-path statistics |
 | `-s, --sessions` | None | Show per-protocol session counts |
@@ -478,10 +558,10 @@ Requires root/administrator privileges (or `setcap` on Linux). Supports Ethernet
 ./mmtReader analyze -t smallFlows.pcap -a
 
 # Live capture with custom 100 MB buffer
-sudo ./mmtReader capture eth0 -b 100 -a
+sudo ./mmtReader capture -i eth0 -b 100 -a
 
 # Live capture on a WiFi interface
-sudo ./mmtReader capture wlP9s9 -a -s
+sudo ./mmtReader capture -i wlP9s9 -a -s
 
 # Disable IP classification (faster, less accurate)
 ./mmtReader analyze -t capture.pcap -a -x 0

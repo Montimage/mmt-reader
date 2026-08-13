@@ -38,8 +38,8 @@ Enable classification by Hostname
 Enable classification by Port number
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 |            MONTIMAGE
-|       MMT-SDK version: 1.7.10 (efd353a3)
-|       ./mmtReader: built Aug 12 2026 09:31:13
+|       MMT-SDK version: 1.8.0 (42cac8b7)
+|       ./mmtReader: built Aug 12 2026 18:32:44
 |       http://montimage.com
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -169,8 +169,8 @@ Protocol statistics:
 Enable classification by Port number
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 |            MONTIMAGE
-|       MMT-SDK version: 1.7.10 (efd353a3)
-|       ./mmtReader: built Aug 12 2026 09:31:13
+|       MMT-SDK version: 1.8.0 (42cac8b7)
+|       ./mmtReader: built Aug 12 2026 18:32:44
 |       http://montimage.com
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -197,7 +197,7 @@ Protocol statistics with the protocol path:
          2        486        238   ethernet.ip.udp.netbios.smb
         16       1952       1280   ethernet.ip.udp.snmp
         42       7229       5465   ethernet.ip.udp.ssdp
-      3093    2771750    2604728   ethernet.ip.tcp.ssl
+      3157    2780519    2610041   ethernet.ip.tcp.ssl
      13708    9135182    8669110   ethernet.ip.tcp
        501      75353      58319   ethernet.ip.udp
 
@@ -208,14 +208,13 @@ Protocol statistics:
      14243    9215613    9016211   ip
      13708    9135182    8669110   tcp
       5320    5969074    5681794   http
-      3093    2771750    2604728   ssl
+      3157    2780519    2610041   ssl
        501      75353      58319   udp
-       299      44762      32204   skype
        220      55096      43216   msn
+       126      19445      14069   unknown
         87      15154      11500   dns
         42       7229       5465   ssdp
         34       5078       3922   icmp
-        20       4174       3250   unknown
         18        918        666   arp
         17       1866       1152   netbios
         16       2592       1920   dropbox
@@ -228,7 +227,7 @@ Protocol statistics:
     Packets: 14261
     Data: 9216531 bytes
     Total Sessions: 679
-    Protocols: 28
+    Protocols: 17
     Duration: 299 seconds
     Bandwidth: 30875.60 bytes/second
     pps: 47.77 packets/second
@@ -248,16 +247,16 @@ Protocol statistics:
 | Rank | Application | Packets | Payload | % of Total |
 |------|-------------|---------|---------|------------|
 | 1 | HTTP (generic) | 5,320 | 5.68 MB | 58% |
-| 2 | SSL (generic) | 3,093 | 2.60 MB | 27% |
+| 2 | SSL (generic) | 3,157 | 2.61 MB | 27% |
 | 3 | MSN | 220 | 55 KB | 0.6% |
-| 4 | Skype (UDP) | 299 | 45 KB | 0.5% |
+| 4 | Unknown | 126 | 19 KB | 0.2% |
 | 5 | DNS | 87 | 15 KB | 0.2% |
 
 **Insights:**
 - **Port-only classification merges application-specific paths** — without IP/hostname matching, MSN and Skype are only detected at the protocol layer (MSN at 220 packets vs 3,735 with full classification)
 - **HTTP generic count jumps from 5,287 to 5,320** — port 80 classification catches more HTTP traffic that full DPI missed
-- **SSL count jumps from 3,090 to 3,093** — port 443 classification catches a few more encrypted flows
-- **Many applications disappear** — Salesforce, photobucket, craigslist, facebook, etc. are not detected because they require IP/hostname fingerprinting
+- **SSL count jumps from 3,090 to 3,157** — port 443 classification catches more encrypted flows
+- **Many applications disappear** — Salesforce, photobucket, craigslist, facebook, google, etc. are not detected because they require IP/hostname fingerprinting
 
 ---
 
@@ -279,7 +278,7 @@ Protocol statistics:
 
 ```json
 {
-  "version": "1.7.10 (efd353a3)",
+  "version": "1.8.0 (42cac8b7)",
   "input_stats": {
     "packets": 14261,
     "data_volume": 9216531,
@@ -291,7 +290,7 @@ Protocol statistics:
   },
   "protocol_paths": [
     {"packets": 7, "data_volume": 3392, "payload_volume": 3014, "path": "ethernet.ip.tcp.unknown"},
-    {"packets": 13, "data_volume": 782, "payload_volume": 236, "path": "ethernet.ip.udp.unknown"},
+    {"packets": 119, "data_volume": 16053, "payload_volume": 11055, "path": "ethernet.ip.udp.unknown"},
     {"packets": 18, "data_volume": 918, "payload_volume": 666, "path": "ethernet.arp"},
     {"packets": 357, "data_volume": 307843, "payload_volume": 288565, "path": "ethernet.ip.tcp.http.craigslist"},
     {"packets": 3, "data_volume": 1026, "payload_volume": 900, "path": "ethernet.ip.udp.dhcp"},
@@ -302,10 +301,10 @@ Protocol statistics:
     {"packets": 14261, "data_volume": 9216531, "payload_volume": 9216531, "path": "ethernet"},
     {"packets": 0, "data_volume": 0, "payload_volume": 0, "path": "ethernet.ip.tcp.facebook"},
     {"packets": 63, "data_volume": 51307, "payload_volume": 47905, "path": "ethernet.ip.tcp.http.facebook"},
-    {"packets": 36, "data_volume": 2344, "payload_volume": 400, "path": "ethernet.ip.tcp.google"},
+    {"packets": 100, "data_volume": 11113, "payload_volume": 5713, "path": "ethernet.ip.tcp.google"},
     {"packets": 424, "data_volume": 223521, "payload_volume": 200625, "path": "ethernet.ip.tcp.ssl.google"},
     {"packets": 96, "data_volume": 91916, "payload_volume": 86732, "path": "ethernet.ip.tcp.http.google"},
-    {"packets": 36, "data_volume": 36171, "payload_volume": 34227, "path": "ethernet.ip.tcp.ssl.google_user_content"},
+    {"packets": 40, "data_volume": 36846, "payload_volume": 34686, "path": "ethernet.ip.tcp.ssl.google_user_content"},
     {"packets": 5287, "data_volume": 5967094, "payload_volume": 5681596, "path": "ethernet.ip.tcp.http"},
     {"packets": 34, "data_volume": 5078, "payload_volume": 3922, "path": "ethernet.ip.icmp"},
     {"packets": 14243, "data_volume": 9215613, "payload_volume": 9016211, "path": "ethernet.ip"},
@@ -337,8 +336,8 @@ Protocol statistics:
     {"name": "msn", "packets": 3735, "data_volume": 4259140, "payload_volume": 4057450},
     {"name": "ssl", "packets": 3090, "data_volume": 2771386, "payload_volume": 2604526},
     {"name": "salesforce", "packets": 1422, "data_volume": 1427322, "payload_volume": 1350534},
-    {"name": "skype", "packets": 773, "data_volume": 461777, "payload_volume": 423623},
-    {"name": "google", "packets": 556, "data_volume": 317781, "payload_volume": 287757},
+    {"name": "skype", "packets": 474, "data_volume": 417015, "payload_volume": 391419},
+    {"name": "google", "packets": 620, "data_volume": 326550, "payload_volume": 293070},
     {"name": "udp", "packets": 501, "data_volume": 75353, "payload_volume": 58319},
     {"name": "craigslist", "packets": 357, "data_volume": 307843, "payload_volume": 288565},
     {"name": "photobucket", "packets": 284, "data_volume": 415889, "payload_volume": 400553},
@@ -346,9 +345,9 @@ Protocol statistics:
     {"name": "dns", "packets": 87, "data_volume": 15154, "payload_volume": 11500},
     {"name": "facebook", "packets": 63, "data_volume": 51307, "payload_volume": 47905},
     {"name": "ssdp", "packets": 42, "data_volume": 7229, "payload_volume": 5465},
-    {"name": "google_user_content", "packets": 36, "data_volume": 36171, "payload_volume": 34227},
+    {"name": "google_user_content", "packets": 40, "data_volume": 36846, "payload_volume": 34686},
     {"name": "icmp", "packets": 34, "data_volume": 5078, "payload_volume": 3922},
-    {"name": "unknown", "packets": 20, "data_volume": 4174, "payload_volume": 3250},
+    {"name": "unknown", "packets": 126, "data_volume": 19445, "payload_volume": 14069},
     {"name": "dropbox", "packets": 20, "data_volume": 3196, "payload_volume": 2308},
     {"name": "arp", "packets": 18, "data_volume": 918, "payload_volume": 666},
     {"name": "netbios", "packets": 17, "data_volume": 1866, "payload_volume": 1152},
@@ -369,7 +368,7 @@ The JSON output has **three top-level sections**:
 
 | Section | Purpose | Example fields |
 |---------|---------|----------------|
-| `version` | MMT-SDK version for reproducibility | `"1.7.10 (efd353a3)"` |
+| `version` | MMT-SDK version for reproducibility | `"1.8.0 (42cac8b7)"` |
 | `input_stats` | Capture-level metrics | `packets`, `duration_seconds`, `packets_per_sec`, `total_sessions` |
 | `protocol_paths` | Per-path breakdown (requires `-a`) | `path`, `packets`, `data_volume`, `payload_volume` |
 | `protocols` | Aggregated per-protocol totals | `name`, `packets`, `data_volume`, `payload_volume` |
@@ -418,7 +417,7 @@ ssl: 2604526 bytes (3090 packets)
 ### Prompt (CLI command)
 
 ```bash
-sudo ./mmtReader capture eth0 -a -b 100
+sudo ./mmtReader capture -i eth0 -a -b 100
 ```
 
 ### Expected Output (Live, updates in real-time)
@@ -429,8 +428,8 @@ Enable classification by Hostname
 Enable classification by Port number
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 |            MONTIMAGE
-|       MMT-SDK version: 1.7.10 (efd353a3)
-|       ./mmtReader: built Aug 12 2026 09:31:13
+|       MMT-SDK version: 1.8.0 (42cac8b7)
+|       ./mmtReader: built Aug 12 2026 18:32:44
 |       http://montimage.com
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Monitoring eth0 (buffer: 100 MB)...
@@ -479,10 +478,10 @@ PCAP Statistics:
 
 | Scenario | Configuration | Reason |
 |----------|---------------|--------|
-| **Low-traffic office** | `sudo ./mmtReader capture eth0 -a` | Default 50 MB buffer is fine |
-| **High-traffic server** | `sudo ./mmtReader capture eth0 -a -b 200 -x 0` | Bigger buffer + disable IP classification for speed |
-| **Debugging DNS issues** | `sudo ./mmtReader capture eth0 -a -y 1 -z 0` | Enable hostname, disable port — DNS resolution detail |
-| **Quick health check** | `sudo ./mmtReader capture eth0 -q` | Quiet mode — only final stats, no progress noise |
+| **Low-traffic office** | `sudo ./mmtReader capture -i eth0 -a` | Default 50 MB buffer is fine |
+| **High-traffic server** | `sudo ./mmtReader capture -i eth0 -a -b 200 -x 0` | Bigger buffer + disable IP classification for speed |
+| **Debugging DNS issues** | `sudo ./mmtReader capture -i eth0 -a -y 1 -z 0` | Enable hostname, disable port — DNS resolution detail |
+| **Quick health check** | `sudo ./mmtReader capture -i eth0 -q` | Quiet mode — only final stats, no progress noise |
 
 ---
 
@@ -506,8 +505,8 @@ Enable classification by Hostname
 Enable classification by Port number
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 |            MONTIMAGE
-|       MMT-SDK version: 1.7.10 (efd353a3)
-|       ./mmtReader: built Aug 12 2026 09:31:13
+|       MMT-SDK version: 1.8.0 (42cac8b7)
+|       ./mmtReader: built Aug 12 2026 18:32:44
 |       http://montimage.com
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -810,8 +809,8 @@ All experiments ran on this machine against `smallFlows.pcap` (Aug 12, 2026):
 | Experiment | Command | Key Metric |
 |------------|---------|------------|
 | 1 — Forensic Triage | `./mmtReader analyze -t smallFlows.pcap -a` | 28 protocols, 679 sessions, 14,261 packets |
-| 2 — Top Talkers | `./mmtReader analyze -t smallFlows.pcap -a -x 0 -y 0` | HTTP at 58% (port-only), many apps undetected |
+| 2 — Top Talkers | `./mmtReader analyze -t smallFlows.pcap -a -x 0 -y 0` | HTTP at 58% (port-only), 17 protocols, many apps undetected |
 | 3 — JSON Pipeline | `./mmtReader analyze -t smallFlows.pcap --json -q -a` | 38 protocol paths, 28 protocols, jq-parseable |
-| 4 — Live Monitor | `sudo ./mmtReader capture eth0 -a -b 100` | Requires live interface — representative output shown |
+| 4 — Live Monitor | `sudo ./mmtReader capture -i eth0 -a -b 100` | Requires live interface — representative output shown |
 | 5 — Session Audit | `./mmtReader analyze -t smallFlows.pcap -s -q` | 679 sessions (all IPv4, 168 still active), 47.77 pps, 2.27 fps |
 | 6 — AI Agent | `./mmtReader analyze -t smallFlows.pcap --json -q -a` | AI parses JSON → natural language answer |
