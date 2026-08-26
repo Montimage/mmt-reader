@@ -222,10 +222,10 @@ int main(int argc, char **argv) {
             while (!got_signal && time(NULL) < deadline) {
                 struct pcap_pkthdr *hdr;
                 const u_char *data;
-                int rc = pcap_next_ex(pcap, &hdr, &data);
-                if (rc == 1) {
+                int next_rc = pcap_next_ex(pcap, &hdr, &data);
+                if (next_rc == 1) {
                     capture_callback(NULL, hdr, data);
-                } else if (rc < 0) {
+                } else if (next_rc < 0) {
                     if (!got_signal) {
                         fprintf(stderr, "[error] Capture failed: %s\n",
                                 pcap_geterr(pcap));
