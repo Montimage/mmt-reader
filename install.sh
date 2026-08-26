@@ -44,7 +44,11 @@ BINDIR="${PREFIX}/bin"
 MANDIR="${PREFIX}/share/man"
 MAN1DIR="${MANDIR}/man1"
 COMPLETIONS_DIR="${PREFIX}/share/bash-completion/completions"
-MMT_BASE="/opt/mmt"
+# Sandbox overrides exist solely for ci/install-smoke.sh; defaults are the
+# production locations and are never changed by command-line options.
+MMT_BASE="${MMT_READER_MMT_BASE:-/opt/mmt}"
+LDCONF_DIR="${MMT_READER_LDCONF_DIR:-/etc/ld.so.conf.d}"
+LDCONF_FILE="${LDCONF_DIR}/mmt-dpi.conf"
 MMT_DPI_DIR="${MMT_BASE}/dpi"
 MMT_DPI_INC="${MMT_DPI_DIR}/include"
 MMT_DPI_LIB="${MMT_DPI_DIR}/lib"
@@ -87,11 +91,35 @@ needs_sudo() {
     fi
 }
 
+# ─── Safe command execution ───────────────────────────────
+# Commands are executed argument-by-argument ("$@") — never re-parsed by a
+# shell — so hostile characters in user-supplied paths (quotes, spaces, '$',
+# …) cannot break out of quoting, even when this script runs as root.
 run() {
     if $DRY_RUN; then
         echo -e "${YELLOW}[DRY-RUN]${NC} $*"
+        return 0
+    fi
+    "$@"
+}
+
+# Like run(), but failures are non-fatal (best-effort cleanup commands).
+run_best_effort() {
+    if $DRY_RUN; then
+        run "$@"
+        return 0
+    fi
+    "$@" 2>/dev/null || true
+}
+
+# Write the MMT-DPI dynamic-loader entry. Redirections cannot go through
+# run(), which deliberately performs no shell parsing, so this helper owns it.
+write_ldconfig_conf() {
+    if $DRY_RUN; then
+        echo -e "${YELLOW}[DRY-RUN]${NC} printf '%s\\n' '${MMT_DPI_LIB}' > '${LDCONF_FILE}'"
     else
-        eval "$@"
+        mkdir -p "${LDCONF_DIR}"
+        printf '%s\n' "${MMT_DPI_LIB}" > "${LDCONF_FILE}"
     fi
 }
 
@@ -135,37 +163,37 @@ if $UNINSTALL; then
 
     # Remove capabilities from mmtReader binary
     if [[ -f "${BINDIR}/mmtReader" ]]; then
-        run "setcap -r '${BINDIR}/mmtReader' 2>/dev/null || true"
+        run_best_effort setcap -r "${BINDIR}/mmtReader"
     fi
 
     # Remove mmtReader binary
     if [[ -f "${BINDIR}/mmtReader" ]]; then
-        run "rm -f '${BINDIR}/mmtReader'"
+        run rm -f "${BINDIR}/mmtReader"
         info "Removed ${BINDIR}/mmtReader"
     fi
 
     # Remove man page
     if [[ -f "${MAN1DIR}/mmtReader.1" ]]; then
-        run "rm -f '${MAN1DIR}/mmtReader.1'"
+        run rm -f "${MAN1DIR}/mmtReader.1"
         info "Removed man page"
     fi
 
     # Remove bash completion
     if [[ -f "${COMPLETIONS_DIR}/mmtReader" ]]; then
-        run "rm -f '${COMPLETIONS_DIR}/mmtReader'"
+        run rm -f "${COMPLETIONS_DIR}/mmtReader"
         info "Removed bash completion"
     fi
 
     # Remove MMT-DPI
     if [[ -d "${MMT_BASE}" ]]; then
-        run "rm -rf '${MMT_BASE}'"
+        run rm -rf "${MMT_BASE}"
         info "Removed ${MMT_BASE}"
     fi
 
     # Remove ldconfig entry
-    if [[ -f /etc/ld.so.conf.d/mmt-dpi.conf ]]; then
-        run "rm -f /etc/ld.so.conf.d/mmt-dpi.conf"
-        run "ldconfig"
+    if [[ -f "${LDCONF_FILE}" ]]; then
+        run rm -f "${LDCONF_FILE}"
+        run ldconfig
         info "Removed ldconfig entry"
     fi
 
@@ -204,13 +232,13 @@ else
     if [[ $EUID -eq 0 ]]; then
         # Root — install missing packages
         if [[ "$PM" == "apt" ]]; then
-            run "apt-get update -qq"
+            run apt-get update -qq
             SYSTEM_PKGS=()
             $HAS_GCC    || SYSTEM_PKGS+=(build-essential gcc g++ make)
             $HAS_LIBPCAP || SYSTEM_PKGS+=(libpcap-dev)
             $HAS_MAKE   || SYSTEM_PKGS+=(make)
             if [[ ${#SYSTEM_PKGS[@]} -gt 0 ]]; then
-                run "apt-get install -y -qq ${SYSTEM_PKGS[@]}"
+                run apt-get install -y -qq "${SYSTEM_PKGS[@]}"
             fi
             info "System dependencies installed (apt)."
         elif [[ "$PM" == "dnf" || "$PM" == "yum" ]]; then
@@ -220,9 +248,9 @@ else
             $HAS_MAKE   || SYSTEM_PKGS+=(make)
             if [[ ${#SYSTEM_PKGS[@]} -gt 0 ]]; then
                 if [[ "$PM" == "dnf" ]]; then
-                    run "dnf install -y ${SYSTEM_PKGS[@]}"
+                    run dnf install -y "${SYSTEM_PKGS[@]}"
                 else
-                    run "yum install -y ${SYSTEM_PKGS[@]}"
+                    run yum install -y "${SYSTEM_PKGS[@]}"
                 fi
             fi
             info "System dependencies installed (${PM})."
@@ -264,28 +292,29 @@ else
         MMT_DPI_VERSION="auto"
         MMT_DPI_GIT_VERSION="$(cd "${MMT_DPI_SRC}" && git log --format="%h" -n 1 2>/dev/null || echo "local")"
 
-        run "cd '${MMT_DPI_BUILD_DIR}' && make VERSION=${MMT_DPI_VERSION} GIT_VERSION=${MMT_DPI_GIT_VERSION} MMT_BASE=${MMT_BASE} install"
+        run make -C "${MMT_DPI_BUILD_DIR}" VERSION="${MMT_DPI_VERSION}" GIT_VERSION="${MMT_DPI_GIT_VERSION}" MMT_BASE="${MMT_BASE}" install
 
         # Run ldconfig
-        run "echo '${MMT_DPI_LIB}' > /etc/ld.so.conf.d/mmt-dpi.conf"
-        run "ldconfig"
+        write_ldconfig_conf
+        run ldconfig
 
         info "MMT-DPI built and installed to ${MMT_DPI_DIR}."
 
     elif [[ -n "${MMT_DPI_PATH}" && -f "${MMT_DPI_PATH}/lib/libmmt_core.so" ]]; then
         # Use pre-built MMT-DPI at custom path
         info "Using pre-built MMT-DPI from ${MMT_DPI_PATH}"
-        run "cp -r '${MMT_DPI_PATH}/include' '${MMT_DPI_PATH}/lib' '${MMT_DPI_DIR}/'"
-        run "echo '${MMT_DPI_LIB}' > /etc/ld.so.conf.d/mmt-dpi.conf"
-        run "ldconfig"
+        run mkdir -p "${MMT_DPI_DIR}"
+        run cp -r "${MMT_DPI_PATH}/include" "${MMT_DPI_PATH}/lib" "${MMT_DPI_DIR}/"
+        write_ldconfig_conf
+        run ldconfig
         info "MMT-DPI installed from ${MMT_DPI_PATH}."
 
     elif [[ -f "${MMT_DPI_SRC}/sdk/mmt-dpi_*.deb" ]]; then
         # Use pre-built .deb from local repo
         DEB_FILE="$(ls "${MMT_DPI_SRC}/sdk/mmt-dpi_*.deb" | head -1)"
         info "Installing MMT-DPI from ${DEB_FILE}"
-        run "dpkg -i '${DEB_FILE}'"
-        run "ldconfig"
+        run dpkg -i "${DEB_FILE}"
+        run ldconfig
         info "MMT-DPI installed from .deb package."
 
     else
@@ -336,13 +365,13 @@ fi
 # ─── Phase 4: Install mmtReader ───────────────────────────
 step "Phase 4: Installing mmtReader..."
 
-run "mkdir -p '${BINDIR}'"
-run "install -m 755 mmtReader '${BINDIR}/mmtReader'"
+run mkdir -p "${BINDIR}"
+run install -m 755 mmtReader "${BINDIR}/mmtReader"
 info "Binary → ${BINDIR}/mmtReader"
 
 if [[ -f "mmtReader.1" ]]; then
-    run "mkdir -p '${MAN1DIR}'"
-    run "install -m 644 mmtReader.1 '${MAN1DIR}/mmtReader.1'"
+    run mkdir -p "${MAN1DIR}"
+    run install -m 644 mmtReader.1 "${MAN1DIR}/mmtReader.1"
     info "Man page → ${MAN1DIR}/mmtReader.1"
 else
     warn "mmtReader.1 not found — skipping man page."
@@ -350,9 +379,9 @@ fi
 
 # Install shell completions
 if [[ -d "completions" ]]; then
-    run "mkdir -p '${COMPLETIONS_DIR}'"
+    run mkdir -p "${COMPLETIONS_DIR}"
     if [[ -f "completions/mmtReader.bash" ]]; then
-        run "install -m 644 completions/mmtReader.bash '${COMPLETIONS_DIR}/mmtReader'"
+        run install -m 644 completions/mmtReader.bash "${COMPLETIONS_DIR}/mmtReader"
         info "Bash completion → ${COMPLETIONS_DIR}/mmtReader"
     fi
     if [[ -f "completions/mmtReader.zsh" ]]; then

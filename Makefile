@@ -18,7 +18,7 @@ SDK_MIN_VERSION = 1.8.0
 SRCS        = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c flows.c config.c
 TARGET      = mmtReader
 
-.PHONY: all build install uninstall clean test coverage completions check-sdk
+.PHONY: all build install uninstall clean test coverage completions check-sdk smoke-install
 
 all: build
 
@@ -171,3 +171,8 @@ coverage:
 
 completions:
 	@echo "Shell completions are generated during install."
+
+# Adversarial-path installer smoke test (task 1.2, closes F-BUG-003).
+# Sandbox-only: no root, no container, no system changes.
+smoke-install:
+	bash ci/install-smoke.sh
