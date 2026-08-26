@@ -37,7 +37,7 @@ pipeline {
         stage("compile") {
             steps {
                 bitbucketStatusNotify(buildState: 'INPROGRESS')
-                sh 'cd /mmt-reader/ && gcc -g -o mmtReader mmtReader.c -I /opt/mmt/dpi/include -L /opt/mmt/dpi/lib -lmmt_core -ldl -lpcap'
+                sh 'cd /mmt-reader/ && make'
                 sh 'ls /mmt-reader'
             }
         }
