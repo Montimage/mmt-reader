@@ -55,8 +55,9 @@ SDK**. It is *not* in this repository and *not* on any public package registry.
   (Montimage-internal; not needed to build, only to modify the SDK).
 - **Known quirk:** stale `1.7.10` shared objects sit alongside the current
   `1.8.0` ones in `/opt/mmt/dpi/lib`. The linker resolves `-lmmt_core` through
-  the unversioned `.so` symlinks, which point at 1.8.0 — do not "clean up" the
-  versioned files blindly.
+  `libmmt_core.so`, a symlink to `libmmt_core.so.auto` — currently the 1.8.0
+  build. Do not "clean up" the versioned files or repoint the symlink blindly;
+  check where it lands first (`readlink /opt/mmt/dpi/lib/libmmt_core.so`).
 
 If `/opt/mmt/dpi` is missing or empty, `make` fails at link time
 (`mmt_core.h: No such file...` / `cannot find -lmmt_core`). Obtain an SDK
@@ -81,7 +82,7 @@ make
 
 Single gcc invocation compiling all nine sources into `./mmtReader`, linking
 against `-lmmt_core -ldl -lpcap` from `/opt/mmt/dpi/lib`. Exit code 0 and an
-executable `./mmtReader` in the repo root = success (~2 s on the reference
+executable `./mmtReader` in the repo root = success (<1 s on the reference
 machine). `make clean` removes the binary.
 
 ## Test
