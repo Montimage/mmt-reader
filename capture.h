@@ -22,6 +22,33 @@
 pcap_t *capture_init(const char *iname, uint16_t buffer_size, uint16_t snaplen);
 
 /**
+ * Convert a PCAP buffer size from MB to bytes.
+ *
+ * The multiplication is carried out in 64-bit arithmetic: the previous
+ * inline `buffer_size * 1000 * 1000` promoted to signed int and
+ * overflowed (undefined behavior) for any size above 2147 MB, yielding
+ * a wrong or negative buffer size for values the CLI accepts up to
+ * 10000 MB.
+ *
+ * @param mb  Buffer size in megabytes (as accepted by the -b/--buffer CLI flag)
+ * @return    The exact size in bytes as a 64-bit value; validate it with
+ *            capture_buffer_bytes_valid() before handing it to pcap
+ */
+long capture_buffer_bytes(int mb);
+
+/**
+ * Check whether a byte count is acceptable to pcap_set_buffer_size().
+ *
+ * pcap_set_buffer_size() takes a signed int, so any product above
+ * INT_MAX cannot be requested and must be rejected by the caller with
+ * a clear error instead of wrapping around.
+ *
+ * @param bytes  Byte count produced by capture_buffer_bytes()
+ * @return       1 when 1 <= bytes <= INT_MAX, 0 otherwise
+ */
+int capture_buffer_bytes_valid(long bytes);
+
+/**
  * Close a handle created by capture_init().
  * Clears the cached capture handle before closing it, so a signal
  * arriving during/after the close cannot call pcap_breakloop() on
