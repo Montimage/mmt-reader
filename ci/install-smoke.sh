@@ -11,6 +11,11 @@
 #   3. nothing is written outside the disposable sandbox,
 #   4. --uninstall removes exactly what was installed.
 #
+# A second scenario proves the restored .deb fallback branch (task 4.5,
+# F-BUG-006): with no sibling sdk/Makefile and no --mmt-dpi override, a
+# planted dummy *.deb (name containing a space) must be picked up via
+# compgen -G glob expansion and handed to dpkg byte-exact.
+#
 # The run is non-destructive and needs NO root and NO container:
 #   * MMT_READER_MMT_BASE / MMT_READER_LDCONF_DIR redirect /opt/mmt and
 #     /etc/ld.so.conf.d into an mktemp sandbox (installer defaults are
@@ -164,6 +169,62 @@ for artifact in \
     [[ ! -e "${artifact}" ]] || fail "uninstall left behind: ${artifact}"
 done
 pass "uninstall removed every artifact"
+
+# ─── Scenario B: restored .deb fallback branch (F-BUG-006) ──
+# No sdk/Makefile and no --mmt-dpi override: only a planted dummy *.deb whose
+# name contains a space. Proves the installer reaches the package-install
+# branch and hands dpkg the exact path byte-exact through the quoting rules.
+PLANTED_DEB="${SANDBOX}/mmt-dpi/sdk/mmt-dpi_1.8.0 spaced test.deb"
+# Path as the installer resolves it (MMT_DPI_SRC keeps the literal "..").
+EXPECTED_DEB="${PAYLOAD}/../mmt-dpi/sdk/mmt-dpi_1.8.0 spaced test.deb"
+mkdir -p "$(dirname "${PLANTED_DEB}")"
+printf 'dummy deb payload\n' > "${PLANTED_DEB}"
+
+DPKG_LOG="${SANDBOX}/dpkg.log"
+cat > "${SHIMS}/dpkg" <<'EOF'
+#!/bin/sh
+for arg in "$@"; do printf '%s\n' "$arg"; done > "${DPKG_LOG:?}"
+pkg=""
+while [ $# -gt 0 ]; do
+    if [ "$1" = "-i" ] && [ $# -ge 2 ]; then pkg="$2"; fi
+    shift
+done
+[ -n "$pkg" ] || exit 0
+root="${MMT_READER_MMT_BASE:?}/dpi"
+mkdir -p "${root}/include" "${root}/lib"
+printf '#define VERSION "1.8.0-deb"\n' > "${root}/include/mmt_core.h"
+printf 'stub libmmt_core\n'            > "${root}/lib/libmmt_core.so"
+EOF
+chmod +x "${SHIMS}/dpkg"
+
+echo ":: Scenario B: planted dummy .deb must reach the package-install branch..."
+PATH="${SHIMS}:${PATH}" \
+    MMT_READER_MMT_BASE="${SANDBOX_MMT_BASE}" \
+    MMT_READER_LDCONF_DIR="${SANDBOX_LDCONF_DIR}" \
+    DPKG_LOG="${DPKG_LOG}" \
+    bash "${PAYLOAD}/install.sh" --prefix "${HOSTILE_PREFIX}" \
+    > "${SANDBOX}/install-deb.log" 2>&1 ||
+    { cat "${SANDBOX}/install-deb.log"; fail ".deb fallback install exited non-zero"; }
+
+grep -qF "Found local MMT-DPI source" "${SANDBOX}/install-deb.log" &&
+    fail ".deb run took the source-build branch instead of the fallback"
+grep -qF "Installing MMT-DPI from ${EXPECTED_DEB}" "${SANDBOX}/install-deb.log" ||
+    { cat "${SANDBOX}/install-deb.log"; fail "planted .deb not selected by the fallback branch"; }
+pass "installer reached the .deb fallback and picked the planted package"
+
+mapfile -t dpkg_args < "${DPKG_LOG}"
+[[ "${dpkg_args[0]:-}" == "-i" && "${dpkg_args[1]:-}" == "${EXPECTED_DEB}" ]] ||
+    fail "dpkg did not receive the planted path byte-exact: $(tr '\n' '|' < "${DPKG_LOG}")"
+pass "dpkg received the spaced .deb path byte-exact"
+
+assert_file "${SANDBOX_MMT_BASE}/dpi/lib/libmmt_core.so"
+grep -qF "MMT-DPI installed from .deb package." "${SANDBOX}/install-deb.log" ||
+    fail "installer did not confirm .deb installation"
+[[ "$(snapshot /opt/mmt)" == "${OPT_BEFORE}" ]] ||
+    fail ".deb run wrote to /opt/mmt — escaped the sandbox"
+[[ "$(snapshot /usr/local/bin/mmtReader)" == "${USRLCL_BEFORE}" ]] ||
+    fail ".deb run wrote to /usr/local/bin — escaped the sandbox"
+pass ".deb fallback completed sandboxed (lib verified, containment intact)"
 
 echo ""
 echo "All installer smoke checks passed."
