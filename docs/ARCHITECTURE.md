@@ -239,8 +239,7 @@ run ends through the normal shutdown path:
         │
         ▼
   cli/output.c
-  ├── output_print_stats_ex() — format and print (TEXT or JSON)
-  └── engine_print_pcap_stats() — drop counts
+  └── output_print_stats_ex() — format and print (TEXT or JSON)
         │
         ▼
   engine_destroy() — cleanup resources
