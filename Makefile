@@ -10,22 +10,45 @@ COMPLETIONS ?= $(PREFIX)/share/bash-completion/completions
 CC          ?= gcc
 CFLAGS      ?= -g -O2
 
+MMT_DPI     ?= /opt/mmt/dpi
+SDK_MIN_VERSION = 1.8.0
+
 SRCS        = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c flows.c config.c
 TARGET      = mmtReader
 
-.PHONY: all build install uninstall clean test completions
+.PHONY: all build install uninstall clean test completions check-sdk
 
 all: build
 
-build: $(TARGET)
+build: check-sdk $(TARGET)
+
+# Abort early when the installed MMT-DPI SDK is missing or older than
+# SDK_MIN_VERSION (see AGENT_ENVIRONMENT.md for the recorded environment).
+check-sdk:
+	@if [ ! -f "$(MMT_DPI)/include/mmt_core.h" ]; then \
+		echo "ERROR: MMT-DPI SDK not found at $(MMT_DPI) (missing include/mmt_core.h)"; \
+		echo "       Install the SDK first — see README.md or run ./install.sh."; \
+		exit 1; \
+	fi; \
+	sdk_version=`sed -n 's/^#define VERSION "\([0-9][0-9.]*\)"/\1/p' $(MMT_DPI)/include/mmt_core.h | head -1`; \
+	if [ -z "$$sdk_version" ]; then \
+		echo "ERROR: cannot read SDK version from $(MMT_DPI)/include/mmt_core.h"; \
+		exit 1; \
+	fi; \
+	lowest=`printf '%s\n%s\n' "$(SDK_MIN_VERSION)" "$$sdk_version" | sort -V | head -1`; \
+	if [ "$$lowest" != "$(SDK_MIN_VERSION)" ]; then \
+		echo "ERROR: MMT-DPI SDK ≥ $(SDK_MIN_VERSION) required, found $$sdk_version in $(MMT_DPI)"; \
+		exit 1; \
+	fi; \
+	echo "MMT-DPI SDK $$sdk_version OK"
 
 $(TARGET): $(SRCS)
 	$(CC) $(CFLAGS) -o $@ $^ \
 		-I. \
-		-I/opt/mmt/dpi/include \
+		-I$(MMT_DPI)/include \
 		-I./utils \
 		-I./cli \
-		-L/opt/mmt/dpi/lib \
+		-L$(MMT_DPI)/lib \
 		-lmmt_core -ldl -lpcap
 
 install: build
@@ -118,6 +141,9 @@ test: build
 	@test -f completions/mmtReader.bash && echo "Bash completion OK" || echo "Bash completion missing"
 	@test -f completions/mmtReader.zsh && echo "Zsh completion OK" || echo "Zsh completion missing"
 	@test -f completions/mmtReader.fish && echo "Fish completion OK" || echo "Fish completion missing"
+	@echo ""
+	@echo "=== Test 14: SDK version check unit tests ==="
+	bash tests/test_sdk_check.sh
 	@echo ""
 	@echo "All tests passed!"
 
