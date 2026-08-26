@@ -95,15 +95,6 @@ void parse_init(cli_options_t *opts);
 int parse_options(int argc, char *argv[], cli_options_t *opts);
 
 /**
- * Print per-command help text to stdout.
- *
- * Shows available subcommands, their options, and exit codes.
- * Hidden flags (-x, -y, -z) are documented in a separate section.
- * @param prog_name Program name (argv[0])
- */
-void parse_help(const char *prog_name);
-
-/**
  * Print usage error to stderr and exit.
  * @param prog_name Program name (argv[0])
  */

@@ -46,7 +46,7 @@ static void test_parse_no_subcommand(void) {
     ASSERT_EQ(1, opts.show_help, "no subcommand sets show_help");
 }
 
-static void test_parse_help_flag(void) {
+static void test_help_flag(void) {
     char *argv[] = { "mmtReader", "--help" };
     int argc = 2;
     cli_options_t opts;
@@ -328,7 +328,7 @@ int main(void) {
 
     test_parse_init_defaults();
     test_parse_no_subcommand();
-    test_parse_help_flag();
+    test_help_flag();
     test_parse_version_flag();
     test_parse_analyze_with_trace();
     test_parse_capture_with_interface();
