@@ -1,0 +1,60 @@
+# CI status surface for mmtReader (F-CI-003, tasks 2.4/2.5).
+#
+# Honest constraint: the MMT-DPI SDK (/opt/mmt/dpi) is proprietary and is NOT
+# available on public GitHub-hosted runners. This workflow never fabricates an
+# SDK installation. It installs the real toolchain dependencies, detects the
+# SDK, and then either runs the full `make && make test` (self-hosted runner
+# or any machine where the SDK exists) or skips those steps with a loud,
+# unmissable marker so a green run can never be mistaken for a verified one.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: make && make test
+    runs-on: ubuntu-latest
+    env:
+      MMT_DPI: /opt/mmt/dpi
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain and jq
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            gcc libc6-dev make libpcap-dev jq
+
+      - name: Detect MMT-DPI SDK
+        id: sdk
+        run: |
+          if [ -f "${MMT_DPI}/include/mmt_core.h" ]; then
+            echo "available=true" >>"$GITHUB_OUTPUT"
+            echo "MMT-DPI SDK found at ${MMT_DPI}"
+          else
+            echo "available=false" >>"$GITHUB_OUTPUT"
+            echo "::warning title=MMT-DPI SDK unavailable::${MMT_DPI} is proprietary and absent on hosted runners — build and test steps are SKIPPED. This green run does NOT verify compilation."
+          fi
+
+      - name: Build (make)
+        if: steps.sdk.outputs.available == 'true'
+        run: make
+
+      - name: Test (make test)
+        if: steps.sdk.outputs.available == 'true'
+        run: make test
+
+      - name: Result summary
+        if: always()
+        run: |
+          {
+            echo "### CI result"
+            if [ "${{ steps.sdk.outputs.available }}" = "true" ]; then
+              echo "- MMT-DPI SDK detected: \`make\` and \`make test\` executed."
+            else
+              echo "- ⚠️ SKIPPED-BY-DESIGN (\`ci.yml\` SDK guard): the proprietary MMT-DPI SDK is not distributable to hosted runners, so \`make\`/\`make test\` did not run. Full verification happens where the SDK is installed (local/Jenkins)."
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
