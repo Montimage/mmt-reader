@@ -14,21 +14,7 @@
 #include <string.h>
 #include "capture.h"
 
-static int tests_run = 0;
-static int tests_pass = 0;
-static int tests_fail = 0;
-
-#define ASSERT_EQ(expected, actual, msg) do { \
-    tests_run++; \
-    if ((expected) == (actual)) { tests_pass++; } \
-    else { printf("FAIL: %s (expected=%d, actual=%d)\n", msg, expected, actual); tests_fail++; } \
-} while(0)
-
-#define ASSERT_MEM_EQ(expected, actual, len, msg) do { \
-    tests_run++; \
-    if (memcmp((expected), (actual), (size_t)(len)) == 0) { tests_pass++; } \
-    else { printf("FAIL: %s (%d bytes differ)\n", msg, len); tests_fail++; } \
-} while(0)
+#include "test_util.h"
 
 /* ------------------------------------------------------------------ */
 /* Synthetic frame helpers                                             */

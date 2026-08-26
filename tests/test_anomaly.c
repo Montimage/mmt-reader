@@ -26,33 +26,7 @@
  */
 #include "core/engine.h"
 
-static int tests_run = 0;
-static int tests_pass = 0;
-static int tests_fail = 0;
-
-#define ASSERT_EQ(expected, actual, msg) do { \
-    tests_run++; \
-    if ((expected) == (actual)) { tests_pass++; } \
-    else { printf("FAIL: %s (expected=%d, actual=%d)\n", msg, expected, actual); tests_fail++; } \
-} while(0)
-
-#define ASSERT_PTR_EQ(expected, actual, msg) do { \
-    tests_run++; \
-    if ((expected) == (actual)) { tests_pass++; } \
-    else { printf("FAIL: %s (expected=%p, actual=%p)\n", msg, (void*)(expected), (void*)(actual)); tests_fail++; } \
-} while(0)
-
-#define ASSERT_NOT_NULL(ptr, msg) do { \
-    tests_run++; \
-    if ((ptr) != NULL) { tests_pass++; } \
-    else { printf("FAIL: %s (expected non-NULL)\n", msg); tests_fail++; } \
-} while(0)
-
-#define ASSERT_STR_EQ(expected, actual, msg) do { \
-    tests_run++; \
-    if (strcmp((expected), (actual)) == 0) { tests_pass++; } \
-    else { printf("FAIL: %s (expected=\"%s\", actual=\"%s\")\n", msg, expected, actual); tests_fail++; } \
-} while(0)
+#include "test_util.h"
 
 /* ---- anomaly_ctx_create tests ---- */
 
