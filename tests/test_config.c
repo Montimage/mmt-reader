@@ -12,33 +12,7 @@
 #include <errno.h>
 #include "config.h"
 
-static int tests_run = 0;
-static int tests_pass = 0;
-static int tests_fail = 0;
-
-#define ASSERT_EQ(expected, actual, msg) do { \
-    tests_run++; \
-    if ((expected) == (actual)) { tests_pass++; } \
-    else { printf("FAIL: %s (expected=%d, actual=%d)\n", msg, expected, actual); tests_fail++; } \
-} while(0)
-
-#define ASSERT_STR_EQ(expected, actual, msg) do { \
-    tests_run++; \
-    if (strcmp((expected), (actual)) == 0) { tests_pass++; } \
-    else { printf("FAIL: %s (expected=\"%s\", actual=\"%s\")\n", msg, expected, actual); tests_fail++; } \
-} while(0)
-
-#define ASSERT_TRUE(val, msg) do { \
-    tests_run++; \
-    if ((val)) { tests_pass++; } \
-    else { printf("FAIL: %s (expected true, got false)\n", msg); tests_fail++; } \
-} while(0)
-
-#define ASSERT_FALSE(val, msg) do { \
-    tests_run++; \
-    if (!(val)) { tests_pass++; } \
-    else { printf("FAIL: %s (expected false, got true)\n", msg); tests_fail++; } \
-} while(0)
+#include "test_util.h"
 
 /* ---- config_init tests ---- */
 

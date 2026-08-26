@@ -33,19 +33,14 @@
 #include <pcap.h>
 #include "core/engine.h"
 
-/* Failures recorded by the scenario currently running (child process) */
-static int scenario_fail = 0;
-
-#define ASSERT_EQ(expected, actual, msg) do { \
-    if ((expected) != (actual)) { \
-        printf("  FAIL: %s (expected=%d, actual=%d)\n", msg, (int)(expected), (int)(actual)); \
-        scenario_fail++; \
-    } \
-} while(0)
-
-#define ASSERT_TRUE(cond, msg) do { \
-    if (!(cond)) { printf("  FAIL: %s\n", msg); scenario_fail++; } \
-} while(0)
+/*
+ * Scenario suite: assertions tally failures in scenario_fail so each
+ * forked child reports them via its exit status (see run_scenario).
+ * Failure text goes to stdout, where the capture helpers below route it
+ * like any other output under test.
+ */
+#define TEST_SCENARIO_MODE
+#include "test_util.h"
 
 /* ------------------------------------------------------------------ */
 /* stdout capture                                                      */

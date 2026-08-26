@@ -44,26 +44,15 @@
 #include <pcap.h>
 #include "core/engine.h"
 
-/* Failures recorded by the scenario currently running (child process) */
-static int scenario_fail = 0;
-
 /*
  * Scenarios assert on the engine_stats_t values, never on printed text,
  * so a child runs with stdout discarded: the statistics summary these
  * calls may print is not what is under test, and it would bury the
  * results. Failures go to stderr, which is left alone.
  */
-#define ASSERT_U64_EQ(expected, actual, msg) do { \
-    if ((uint64_t)(expected) != (uint64_t)(actual)) { \
-        fprintf(stderr, "  FAIL: %s (expected=%lu, actual=%lu)\n", msg, \
-                (unsigned long)(expected), (unsigned long)(actual)); \
-        scenario_fail++; \
-    } \
-} while(0)
-
-#define ASSERT_TRUE(cond, msg) do { \
-    if (!(cond)) { fprintf(stderr, "  FAIL: %s\n", msg); scenario_fail++; } \
-} while(0)
+#define TEST_SCENARIO_MODE
+#define TEST_FAIL_OUT stderr
+#include "test_util.h"
 
 /** Discard the child's stdout; the summary printed there is not the subject */
 static void silence_stdout(void) {

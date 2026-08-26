@@ -21,21 +21,7 @@
 #include "mmt_core.h"
 #include "flows.h"
 
-static int tests_run = 0;
-static int tests_pass = 0;
-static int tests_fail = 0;
-
-#define ASSERT_EQ(expected, actual, msg) do { \
-    tests_run++; \
-    if ((expected) == (actual)) { tests_pass++; } \
-    else { printf("FAIL: %s (expected=%d, actual=%d)\n", msg, expected, actual); tests_fail++; } \
-} while(0)
-
-#define ASSERT_TRUE(cond, msg) do { \
-    tests_run++; \
-    if (cond) { tests_pass++; } \
-    else { printf("FAIL: %s\n", msg); tests_fail++; } \
-} while(0)
+#include "test_util.h"
 
 /* ------------------------------------------------------------------ */
 /* Synthetic frame helpers                                             */
