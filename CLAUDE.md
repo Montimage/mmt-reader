@@ -34,7 +34,9 @@ MMT-DPI SDK and reports protocol stats as text or JSON.
 - YOU MUST keep `make && make test` green before committing; one tolerated skip is expected:
   live capture on `lo` (root-gated) skips by design under unprivileged runs.
 - Never delete or overwrite fixture pcaps (`smallFlows.pcap`, `test.pcap`) — tests use them.
-- No new external dependencies: SDK include/link paths are hardcoded in `Makefile`.
+- No new external dependencies: SDK include/link paths default to `/opt/mmt/dpi`
+  (overridable with `make MMT_DPI=...`); the build aborts when the SDK is
+  missing or older than 1.8.0 (`make check-sdk`).
 - Do not hand-edit one shell completion in `completions/` without updating all three.
 
 ## Workflow preferences

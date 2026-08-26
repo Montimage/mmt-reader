@@ -5,8 +5,9 @@
  * and destroy. Links against engine.c for the implementation.
  *
  * Compile: gcc -g -o test_anomaly tests/test_anomaly.c core/engine.c \
- *           -I. -I/opt/mmt/dpi/include -I./cli -L/opt/mmt/dpi/lib \
- *           -lmmt_core -ldl -lpcap
+ *           cli/output.c utils/colors.c utils/version.c \
+ *           -I. -I/opt/mmt/dpi/include -I./utils -I./cli \
+ *           -L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap
  */
 #include <stdio.h>
 #include <stdlib.h>
