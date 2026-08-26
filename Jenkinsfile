@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'ubuntu'
+            image 'ubuntu:24.04'
             args '-u root:sudo -v $HOME/workspace/mmt-reader:/mmt-reader -v $HOME/workspace/mmt-sdk:/mmt-sdk'
         }
     }
@@ -11,19 +11,14 @@ pipeline {
                 bitbucketStatusNotify(buildState: 'INPROGRESS')
                 sh 'apt-get update -y'
                 sh 'apt-get install -y git build-essential gcc cmake make gdb jq'
-                sh 'apt-get install -y software-properties-common'
-                sh 'apt-get install -y build-essential'
-                sh 'add-apt-repository -y ppa:ubuntu-toolchain-r/test'
-                sh 'apt-get update -y'
-                sh 'apt-get install -y gcc-4.9 g++-4.9 cpp-4.9'
-                sh 'cd /usr/bin && rm gcc g++ cpp && ln -s gcc-4.9 gcc && ln -s g++-4.9 g++ && ln -s cpp-4.9 cpp && gcc -v'
+                sh 'gcc --version'
             }
         }
 
         stage("install_dependencies") {
             steps {
                 bitbucketStatusNotify(buildState: 'INPROGRESS')
-                sh 'apt-get install -y libpcap-dev libconfuse-dev'
+                sh 'apt-get install -y libpcap-dev'
             }
         }
         stage("install_dpi") {
