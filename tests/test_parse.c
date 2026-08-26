@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <getopt.h>
 #include "cli/parse.h"
 
@@ -18,7 +19,7 @@ static void test_parse_init_defaults(void) {
     cli_options_t opts;
     parse_init(&opts);
 
-    ASSERT_EQ(NULL, opts.input, "input should be NULL");
+    ASSERT_PTR_EQ(NULL, opts.input, "input should be NULL");
     ASSERT_EQ(0, opts.mode, "mode should be 0");
     ASSERT_EQ(50, opts.buffer_mb, "buffer_mb should be 50");
     ASSERT_EQ(0, opts.proto_path, "proto_path should be 0");
@@ -169,6 +170,157 @@ static void test_parse_proto_path(void) {
     ASSERT_EQ(1, opts.proto_path, "-a sets proto_path=1");
 }
 
+/* ---- Config precedence vs environment variables (issue #55) ---- */
+
+/** Create a throwaway HOME directory containing a .mmtreader.conf */
+static int make_test_home(char *dir_buf, size_t buf_size, const char *conf) {
+    snprintf(dir_buf, buf_size, "/tmp/mmt_parse_home_XXXXXX");
+    if (mkdtemp(dir_buf) == NULL) {
+        return 0;
+    }
+    char conf_path[512];
+    snprintf(conf_path, sizeof(conf_path), "%s/.mmtreader.conf", dir_buf);
+    FILE *fp = fopen(conf_path, "w");
+    if (fp == NULL) {
+        return 0;
+    }
+    fputs(conf, fp);
+    fclose(fp);
+    return 1;
+}
+
+static void remove_test_home(const char *dir) {
+    char conf_path[512];
+    snprintf(conf_path, sizeof(conf_path), "%s/.mmtreader.conf", dir);
+    unlink(conf_path);
+    rmdir(dir);
+}
+
+static void clear_mmt_env(void) {
+    unsetenv("MMTREADER_JSON");
+    unsetenv("MMTREADER_NO_COLOR");
+    unsetenv("MMTREADER_QUIET");
+}
+
+static void restore_home(char *saved_home) {
+    if (saved_home != NULL) {
+        setenv("HOME", saved_home, 1);
+    } else {
+        unsetenv("HOME");
+    }
+}
+
+static int parse_analyze_test_pcap(cli_options_t *opts) {
+    char *argv[] = { "mmtReader", "analyze", "-t", "test.pcap" };
+    parse_init(opts);
+    return parse_options(4, argv, opts);
+}
+
+/*
+ * A config-file value must survive when the corresponding env var is
+ * UNSET: the old env_get_int() returned 0 for unset variables and
+ * silently clobbered the values loaded from ~/.mmtreader.conf.
+ */
+static void test_config_survives_unset_env(void) {
+    char home[64];
+    char *saved_home = getenv("HOME") ? strdup(getenv("HOME")) : NULL;
+    ASSERT_TRUE(make_test_home(home, sizeof(home),
+                "json = 1\nquiet = 1\nverbose = 1\nno_color = 1\nbuffer = 777\n"),
+                "test home with config created");
+    clear_mmt_env();
+    setenv("HOME", home, 1);
+
+    cli_options_t opts;
+    int rc = parse_analyze_test_pcap(&opts);
+
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "analyze parses with config-only settings");
+    ASSERT_EQ(1, opts.json, "config json=1 survives unset MMTREADER_JSON");
+    ASSERT_EQ(1, opts.quiet, "config quiet=1 survives unset MMTREADER_QUIET");
+    ASSERT_EQ(1, opts.no_color, "config no_color=1 survives unset MMTREADER_NO_COLOR");
+    ASSERT_EQ(1, opts.verbose, "config verbose=1 survives (no env var exists)");
+    ASSERT_EQ(777, opts.buffer_mb, "config buffer=777 survives");
+
+    restore_home(saved_home);
+    free(saved_home);
+    remove_test_home(home);
+}
+
+/*
+ * A SET env var overrides the config file (documented precedence:
+ * config < environment < CLI flags).
+ */
+static void test_set_env_overrides_config(void) {
+    char home[64];
+    char *saved_home = getenv("HOME") ? strdup(getenv("HOME")) : NULL;
+    ASSERT_TRUE(make_test_home(home, sizeof(home),
+                "json = 0\nquiet = 0\nno_color = 0\nbuffer = 50\n"),
+                "test home with config created");
+    clear_mmt_env();
+    setenv("MMTREADER_QUIET", "1", 1);
+    setenv("HOME", home, 1);
+
+    cli_options_t opts;
+    int rc = parse_analyze_test_pcap(&opts);
+
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "analyze parses with env + config settings");
+    ASSERT_EQ(1, opts.quiet, "set MMTREADER_QUIET=1 overrides config quiet=0");
+    ASSERT_EQ(0, opts.json, "config json=0 kept when MMTREADER_JSON is unset");
+    ASSERT_EQ(50, opts.buffer_mb, "config buffer=50 kept (no env override)");
+
+    restore_home(saved_home);
+    free(saved_home);
+    clear_mmt_env();
+    remove_test_home(home);
+}
+
+/*
+ * Conflicting case: an explicit MMTREADER_JSON=0 beats a config that
+ * enables json — applying the env value (not dropping it) is what makes
+ * the precedence deterministic.
+ */
+static void test_env_zero_overrides_config_conflict(void) {
+    char home[64];
+    char *saved_home = getenv("HOME") ? strdup(getenv("HOME")) : NULL;
+    ASSERT_TRUE(make_test_home(home, sizeof(home), "json = 1\n"),
+                "test home with config created");
+    clear_mmt_env();
+    setenv("MMTREADER_JSON", "0", 1);
+    setenv("HOME", home, 1);
+
+    cli_options_t opts;
+    int rc = parse_analyze_test_pcap(&opts);
+
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "analyze parses in conflicting case");
+    ASSERT_EQ(0, opts.json, "explicit MMTREADER_JSON=0 overrides config json=1");
+
+    restore_home(saved_home);
+    free(saved_home);
+    clear_mmt_env();
+    remove_test_home(home);
+}
+
+/* An empty env value behaves like an unset one (config survives) */
+static void test_empty_env_value_treated_as_unset(void) {
+    char home[64];
+    char *saved_home = getenv("HOME") ? strdup(getenv("HOME")) : NULL;
+    ASSERT_TRUE(make_test_home(home, sizeof(home), "quiet = 1\n"),
+                "test home with config created");
+    clear_mmt_env();
+    setenv("MMTREADER_QUIET", "", 1);
+    setenv("HOME", home, 1);
+
+    cli_options_t opts;
+    int rc = parse_analyze_test_pcap(&opts);
+
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "analyze parses with empty env value");
+    ASSERT_EQ(1, opts.quiet, "empty MMTREADER_QUIET leaves config quiet=1 intact");
+
+    restore_home(saved_home);
+    free(saved_home);
+    clear_mmt_env();
+    remove_test_home(home);
+}
+
 /* ---- Main ---- */
 
 int main(void) {
@@ -187,6 +339,10 @@ int main(void) {
     test_parse_no_color_flag();
     test_parse_buffer_size();
     test_parse_proto_path();
+    test_config_survives_unset_env();
+    test_set_env_overrides_config();
+    test_env_zero_overrides_config_conflict();
+    test_empty_env_value_treated_as_unset();
 
     printf("\n=== Results ===\n");
     printf("Run:  %d\n", tests_run);

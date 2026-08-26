@@ -118,6 +118,18 @@ set -e
 assert_exit_code "overflow buffer returns exit 2" 2 "$rc"
 assert_output_contains "overflow buffer shows error" "buffer size must be a positive integer" "$out"
 
+# Accepted maximum (issue #56): --help still documents 10000 MB ...
+out=$( "$BINARY" analyze --help 2>&1 )
+assert_output_contains "help documents the 1-10000 MB range" "1-10000" "$out"
+
+# ... and the parser accepts exactly that boundary value (exit 0)
+set +e
+rc=0
+out=$( "$BINARY" analyze -t smallFlows.pcap -b 10000 2>&1 ) || rc=$?
+set -e
+assert_exit_code "boundary max 10000 MB is accepted by the parser" 0 "$rc"
+assert_output_contains "analysis runs with 10000 MB buffer" "MMT-READER STATS" "$out"
+
 # ---- Issue #12: Quiet flag ----
 echo ""
 echo "--- Issue #12: Quiet flag ---"

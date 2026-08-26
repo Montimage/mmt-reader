@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <pcap.h>
 #include "capture.h"
 #include "mmt_core.h"
@@ -178,6 +179,17 @@ int capture_wifi_to_ethernet(const u_char *data, int caplen,
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
+long capture_buffer_bytes(int mb) {
+    /* 64-bit math: the old inline `buffer_size * 1000 * 1000` promoted
+     * to signed int and overflowed for sizes above 2147 MB (F-BUG-002) */
+    return (long)mb * 1000L * 1000L;
+}
+
+int capture_buffer_bytes_valid(long bytes) {
+    /* pcap_set_buffer_size() accepts a signed int only */
+    return bytes >= 1 && bytes <= (long)INT_MAX;
+}
+
 pcap_t *capture_init(const char *iname, uint16_t buffer_size, uint16_t snaplen) {
     pcap_t *my_pcap;
     char errbuf[1024];
@@ -188,10 +200,20 @@ pcap_t *capture_init(const char *iname, uint16_t buffer_size, uint16_t snaplen) 
         return NULL;
     }
 
+    long buf_bytes = capture_buffer_bytes(buffer_size);
+    if (!capture_buffer_bytes_valid(buf_bytes)) {
+        fprintf(stderr,
+                "[error] Buffer size %u MB is too large: the maximum supported "
+                "pcap buffer is %d MB\n",
+                buffer_size, INT_MAX / 1000000);
+        pcap_close(my_pcap);
+        return NULL;
+    }
+
     pcap_set_snaplen(my_pcap, snaplen);
     pcap_set_promisc(my_pcap, 1);
     pcap_set_timeout(my_pcap, 200);
-    pcap_set_buffer_size(my_pcap, buffer_size * 1000 * 1000);
+    pcap_set_buffer_size(my_pcap, (int)buf_bytes);
 
     int act_rc = pcap_activate(my_pcap);
     if (act_rc < 0) {

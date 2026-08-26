@@ -20,13 +20,25 @@
 /* Environment variable helpers                                        */
 /* ------------------------------------------------------------------ */
 
-static int env_get_int(const char *name) {
+/**
+ * Apply an integer-valued environment override only when the variable
+ * is actually set to a non-empty value.
+ *
+ * Unset variables leave *out untouched: values loaded from the config
+ * file must survive when no override exists (the previous helper
+ * returned 0 for unset variables, silently clobbering the config).
+ *
+ * @param name  Environment variable name
+ * @param out   Destination receiving the parsed value when applied
+ * @return      1 when an override was applied, 0 otherwise
+ */
+static int env_apply_int(const char *name, int *out) {
     const char *val = getenv(name);
-    if (val != NULL && val[0] != '\0') {
-        int ival = atoi(val);
-        return (ival != 0) ? 1 : 0;
+    if (val == NULL || val[0] == '\0') {
+        return 0;
     }
-    return 0;
+    *out = atoi(val) ? 1 : 0;
+    return 1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -47,7 +59,7 @@ static const char *analyze_help =
 "Options:\n"
 "  -t, --trace <file>       Trace file to analyze (required)\n"
 "  -i, --interface <iface>  Live network interface (alternative to -t)\n"
-"  -b, --buffer <MB>        PCAP buffer size in MB (default: 50)\n"
+"  -b, --buffer <MB>        PCAP buffer size in MB (1-10000, default: 50)\n"
 "  -a, --proto-path         Show per-protocol-path statistics\n"
 "  -s, --sessions           Show per-protocol session counts\n"
 "  -j, --json               Output statistics in JSON format\n"
@@ -85,7 +97,7 @@ static const char *capture_help =
 "\n"
 "Options:\n"
 "  -i, --interface <iface>  Network interface to capture from (required)\n"
-"  -b, --buffer <MB>        PCAP buffer size in MB (default: 50)\n"
+"  -b, --buffer <MB>        PCAP buffer size in MB (1-10000, default: 50)\n"
 "  -a, --proto-path         Show per-protocol-path statistics\n"
 "  -s, --sessions           Show per-protocol session counts\n"
 "  -F, --flows <seconds>    Capture for <seconds>, then report top flows by volume\n"
@@ -126,6 +138,7 @@ static const char *general_help =
 "General options:\n"
 "  -q, --quiet              Suppress progress output\n"
 "  -v, --verbose            Show verbose debug output\n"
+"  -b, --buffer <MB>        PCAP buffer size in MB (1-10000, default: 50)\n"
 "  -h, --help       Show this help message\n"
 "  -V, --version    Print version information\n"
 "\n"
@@ -196,9 +209,9 @@ void parse_init(cli_options_t *opts) {
     opts->config_path     = NULL;
 
     /* Environment variables (lowest priority — CLI flags override these) */
-    opts->json    = env_get_int("MMTREADER_JSON");
-    opts->no_color = env_get_int("MMTREADER_NO_COLOR");
-    opts->quiet   = env_get_int("MMTREADER_QUIET");
+    env_apply_int("MMTREADER_JSON", &opts->json);
+    env_apply_int("MMTREADER_NO_COLOR", &opts->no_color);
+    env_apply_int("MMTREADER_QUIET", &opts->quiet);
 
 }
 
@@ -223,10 +236,12 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
         if (opts->buffer_mb == 0) opts->buffer_mb = 50;
     }
 
-    /* Environment variables (medium priority — CLI flags override these) */
-    opts->json    = env_get_int("MMTREADER_JSON");
-    opts->no_color = env_get_int("MMTREADER_NO_COLOR");
-    opts->quiet   = env_get_int("MMTREADER_QUIET");
+    /* Environment variables (medium priority — CLI flags override these).
+     * Applied only when actually set: unset variables must not overwrite
+     * the values just loaded from the config file. */
+    env_apply_int("MMTREADER_JSON", &opts->json);
+    env_apply_int("MMTREADER_NO_COLOR", &opts->no_color);
+    env_apply_int("MMTREADER_QUIET", &opts->quiet);
 
     /* Determine subcommand from first non-option argument */
     if (argc > 1) {

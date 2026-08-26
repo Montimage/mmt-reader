@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include "capture.h"
 
 /* Some older libpcap headers do not expose these datalink constants */
@@ -343,6 +344,55 @@ static void test_fallback_when_processor_cleared(void) {
     close_extraction();
 }
 
+/* ------------------------------------------------------------------ */
+/* Buffer size conversion (issue #56 — F-BUG-002 boundary)             */
+/* ------------------------------------------------------------------ */
+
+/* Small sizes convert exactly: MB -> 1000*1000 bytes */
+static void test_buffer_bytes_small_values(void) {
+    ASSERT_TRUE(capture_buffer_bytes(1) == 1000000L, "1 MB converts to 1000000 bytes");
+    ASSERT_TRUE(capture_buffer_bytes(50) == 50000000L, "default 50 MB converts to 50000000 bytes");
+    ASSERT_TRUE(capture_buffer_bytes_valid(capture_buffer_bytes(50)),
+                "default 50 MB is within the pcap limit");
+}
+
+/* The largest size whose product still fits a signed int is accepted */
+static void test_buffer_bytes_max_fitting_value(void) {
+    long bytes = capture_buffer_bytes(2147);
+    ASSERT_TRUE(bytes == 2147000000L, "2147 MB converts to exactly 2147000000 bytes");
+    ASSERT_TRUE(capture_buffer_bytes_valid(bytes),
+                "2147 MB (largest below INT_MAX) is accepted");
+}
+
+/*
+ * The accepted CLI maximum (10000 MB) must produce the exact 64-bit
+ * byte count — the previous inline int math overflowed here and handed
+ * pcap_set_buffer_size() a wrong or negative size.
+ */
+static void test_buffer_bytes_cli_max_computed_without_overflow(void) {
+    long bytes = capture_buffer_bytes(10000);
+    ASSERT_TRUE(bytes == 10000000000L,
+                "CLI max 10000 MB computes exactly 10000000000 bytes (no int overflow)");
+    ASSERT_FALSE(capture_buffer_bytes_valid(bytes),
+                "10000 MB exceeds INT_MAX so capture_init rejects it with a clear error");
+}
+
+/* Values beyond the pcap limit, and non-positive sizes, are rejected */
+static void test_buffer_bytes_rejects_out_of_range(void) {
+    ASSERT_FALSE(capture_buffer_bytes_valid(capture_buffer_bytes(2148)),
+                 "2148 MB (first value above INT_MAX) is rejected");
+    ASSERT_FALSE(capture_buffer_bytes_valid(capture_buffer_bytes(65535)),
+                 "uint16 max 65535 MB is rejected");
+    ASSERT_FALSE(capture_buffer_bytes_valid(capture_buffer_bytes(0)),
+                 "zero buffer size is rejected");
+    ASSERT_FALSE(capture_buffer_bytes_valid(capture_buffer_bytes(-5)),
+                 "negative buffer size is rejected");
+    ASSERT_FALSE(capture_buffer_bytes_valid((long)INT_MAX + 1),
+                 "INT_MAX + 1 bytes is rejected");
+    ASSERT_TRUE(capture_buffer_bytes_valid(INT_MAX),
+                "INT_MAX itself remains acceptable to pcap_set_buffer_size()");
+}
+
 /* ---- Main ---- */
 
 int main(void) {
@@ -355,6 +405,10 @@ int main(void) {
     test_wifi_raw_fallback_dispatch();
     test_processor_failure_does_not_stop_dispatch();
     test_fallback_when_processor_cleared();
+    test_buffer_bytes_small_values();
+    test_buffer_bytes_max_fitting_value();
+    test_buffer_bytes_cli_max_computed_without_overflow();
+    test_buffer_bytes_rejects_out_of_range();
 
     printf("\n=== Results ===\n");
     printf("Run:  %d\n", tests_run);
