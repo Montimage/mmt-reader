@@ -7,3 +7,8 @@ mmtReader
 dist/
 .asm-improver/
 *.bak
+# gcov coverage artifacts (make coverage)
+*.gcno
+*.gcda
+*.gcov
+.coverage.raw

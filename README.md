@@ -428,6 +428,18 @@ installed SDK is missing or older (`make check-sdk`).
 make build
 ```
 
+#### Coverage
+
+```bash
+make coverage
+```
+
+Reruns the test suite with the unit-test binaries instrumented via `--coverage`
+and prints a per-source line/branch coverage summary using plain `gcov`
+(`gcovr`/`lcov` are not required). The default build is untouched —
+instrumentation applies only to the unit-test binaries; gcov artifacts
+(`.gcno`/`.gcda`/`.gcov`) are removed when the target finishes.
+
 #### Install Globally
 
 Make `mmtReader` available system-wide with the **self-contained installer** — it installs everything on a fresh machine:

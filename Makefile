@@ -9,6 +9,8 @@ COMPLETIONS ?= $(PREFIX)/share/bash-completion/completions
 
 CC          ?= gcc
 CFLAGS      ?= -g -O2
+TEST_CFLAGS ?= -g
+COV_FLAGS   ?= --coverage -DCOVERAGE_BUILD
 
 MMT_DPI     ?= /opt/mmt/dpi
 SDK_MIN_VERSION = 1.8.0
@@ -16,7 +18,7 @@ SDK_MIN_VERSION = 1.8.0
 SRCS        = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c flows.c config.c
 TARGET      = mmtReader
 
-.PHONY: all build install uninstall clean test completions check-sdk
+.PHONY: all build install uninstall clean test coverage completions check-sdk
 
 all: build
 
@@ -96,40 +98,40 @@ test: build
 	./$(TARGET) analyze -t smallFlows.pcap -a --json --sessions 2>/dev/null | jq '.protocols[0].sessions' > /dev/null && echo "JSON sessions valid OK"
 	@echo ""
 	@echo "=== Test 5: Config unit tests ==="
-	gcc -g -o test_config tests/test_config.c config.c -I. && ./test_config && rm -f test_config
+	$(CC) $(TEST_CFLAGS) -o test_config tests/test_config.c config.c -I. && ./test_config && rm -f test_config
 	@echo ""
 	@echo "=== Test 5b: Anomaly detection unit tests ==="
-	gcc -g -o test_anomaly tests/test_anomaly.c core/engine.c cli/output.c \
+	$(CC) $(TEST_CFLAGS) -o test_anomaly tests/test_anomaly.c core/engine.c cli/output.c \
 		utils/colors.c utils/version.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_anomaly && rm -f test_anomaly
 	@echo ""
 	@echo "=== Test 6: Parse unit tests ==="
-	gcc -g -o test_parse tests/test_parse.c cli/parse.c config.c -I. -I./utils && ./test_parse && rm -f test_parse
+	$(CC) $(TEST_CFLAGS) -o test_parse tests/test_parse.c cli/parse.c config.c -I. -I./utils && ./test_parse && rm -f test_parse
 	@echo ""
 	@echo "=== Test 7: WiFi conversion unit tests ==="
-	gcc -g -o test_wifi tests/test_wifi.c capture.c \
+	$(CC) $(TEST_CFLAGS) -o test_wifi tests/test_wifi.c capture.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_wifi && rm -f test_wifi
 	@echo ""
 	@echo "=== Test 8: Flow reporting unit tests ==="
-	gcc -g -o test_flows tests/test_flows.c flows.c \
+	$(CC) $(TEST_CFLAGS) -o test_flows tests/test_flows.c flows.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_flows && rm -f test_flows
 	@echo ""
 	@echo "=== Test 9: Capture dispatch unit tests ==="
-	gcc -g -o test_capture_dispatch tests/test_capture_dispatch.c capture.c \
+	$(CC) $(TEST_CFLAGS) -o test_capture_dispatch tests/test_capture_dispatch.c capture.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_capture_dispatch && rm -f test_capture_dispatch
 	@echo ""
 	@echo "=== Test 10: Engine output unit tests ==="
-	gcc -g -o test_engine_output tests/test_engine_output.c core/engine.c cli/output.c \
+	$(CC) $(TEST_CFLAGS) -o test_engine_output tests/test_engine_output.c core/engine.c cli/output.c \
 		utils/colors.c utils/version.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_engine_output && rm -f test_engine_output
 	@echo ""
 	@echo "=== Test 11: Engine statistics unit tests ==="
-	gcc -g -o test_engine_stats tests/test_engine_stats.c core/engine.c cli/output.c \
+	$(CC) $(TEST_CFLAGS) -o test_engine_stats tests/test_engine_stats.c core/engine.c cli/output.c \
 		utils/colors.c utils/version.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_engine_stats && rm -f test_engine_stats
@@ -146,6 +148,26 @@ test: build
 	bash tests/test_sdk_check.sh
 	@echo ""
 	@echo "All tests passed!"
+
+# Coverage (task 3.1, closes F-TEST-002): rerun the suite with the unit-test
+# binaries instrumented via --coverage and summarize per-source line/branch
+# coverage with plain gcov. The default build is untouched — instrumentation
+# reaches the suite only through TEST_CFLAGS; `make` / `make test` are unchanged.
+coverage:
+	@command -v gcov >/dev/null 2>&1 || { echo "ERROR: gcov not found (comes with gcc)"; exit 1; }
+	$(MAKE) clean
+	$(MAKE) test TEST_CFLAGS="-g $(COV_FLAGS)"
+	@echo ""
+	@echo "=== Coverage summary (unit suites, per source file) ==="
+	@find . -name '*.gcda' | LC_ALL=C sort | while read -r f; do \
+		gcov -b "$$f" 2>/dev/null || true; \
+	done > .coverage.raw
+	@awk -f tests/coverage-summary.awk .coverage.raw
+	@rm -f .coverage.raw
+	@find . \( -name '*.gcda' -o -name '*.gcno' -o -name '*.gcov' \) -delete
+	@rm -f test_config test_anomaly test_parse test_wifi test_flows \
+		test_capture_dispatch test_engine_output test_engine_stats
+	@echo "Coverage artifacts cleaned."
 
 completions:
 	@echo "Shell completions are generated during install."

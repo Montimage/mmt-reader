@@ -127,6 +127,37 @@ handle needs root or `cap_net_raw`, so under an unprivileged agent it skips by
 design (test_cli.sh:212-225) and counts as passed. Running the suite as root
 removes the skip but changes nothing else.
 
+## Coverage
+
+```sh
+make coverage
+```
+
+Wires gcov coverage around the existing suite (modernization task 3.1,
+closes `F-TEST-002`): it cleans, reruns the **full** `make test` with the
+unit-test binaries (tests 5–11) rebuilt via `TEST_CFLAGS='-g --coverage'`,
+then summarizes per-source line/branch coverage with plain `gcov`
+(`gcovr`/`lcov` are not needed; plain gcov ships with gcc).
+
+- Requires only tools already listed above: gcc's `gcov`, GNU make, jq.
+- The default build is untouched — instrumentation reaches the suite only
+  through the `TEST_CFLAGS` override; `make` / `make test` behave exactly as
+  documented in the previous sections.
+- Each unit-test binary produces its own `<exe>-<source>.gc{no,da}` pair in
+  the repo root; the summary keeps each source file's best percentage across
+  suites (a union approximation). Sources under `tests/` are excluded from
+  the table; `mmtReader.c` is absent because the CLI integration group runs
+  the uninstrumented binary.
+- Exit code 0 and a concrete percentage in the output = success. Quick check
+  used by milestone M3 of `MODERNIZATION_PLAN.md`:
+
+```sh
+make clean >/dev/null && make coverage 2>&1 | grep -o "[0-9]\+\(\.[0-9]\+\)\?%" | head -1
+```
+
+- All coverage artifacts (`.gcno`, `.gcda`, `.gcov`) and instrumented test
+  binaries are deleted when the target finishes; they are also gitignored.
+
 ## Agent verification checklist
 
 Run these in order from a clean checkout; all must succeed here:
