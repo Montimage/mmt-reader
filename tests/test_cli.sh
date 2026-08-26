@@ -306,8 +306,51 @@ else
         echo "NOTE: the capture window produced no flows — the --json flow table routing was not exercised"
     fi
 
+    # Issue #57: SIGTERM (systemd stop, plain kill) must shut down as
+    # gracefully as Ctrl+C — statistics printed once, exit code 0.
+    set +e
+    "$BINARY" capture -i "$CAPTURE_IF" -a > "$CAP_TMP/term.out" 2> "$CAP_TMP/term.err" &
+    term_pid=$!
+    sleep 2
+    kill -TERM $term_pid 2>/dev/null || true
+    wait $term_pid
+    term_rc=$?
+    set -e
+    assert_exit_code "kill -TERM stops the capture gracefully" 0 "$term_rc"
+    assert_occurrence_count "SIGTERM still prints statistics once" \
+        "INPUT STATISTICS" 1 "$( cat "$CAP_TMP/term.out" )"
+
     rm -rf "$CAP_TMP"
 fi
+
+# ---- Issue #69: extraction-failure shutdown summary ----
+echo ""
+echo "--- Issue #69: extraction-failure summary ---"
+
+# A hand-built pcap whose records are inconsistent: 40 bytes were
+# captured but the wire length claims 10 — the DPI rejects every such
+# frame. The old build printed one stderr line PER packet; the fix
+# reports the total once at shutdown, so 3 malformed packets must
+# yield exactly one failure line.
+MAL_TMP=$( mktemp -d )
+printf '\xd4\xc3\xb2\xa1\x02\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\x00\x00\x01\x00\x00\x00' \
+       > "$MAL_TMP/bad.pcap"
+for i in 1 2 3; do
+    printf '\x00\x00\x00\x00\x00\x00\x00\x00\x28\x00\x00\x00\x0a\x00\x00\x00' \
+        >> "$MAL_TMP/bad.pcap"
+    head -c 40 /dev/zero | tr '\0' 'A' >> "$MAL_TMP/bad.pcap"
+done
+
+set +e
+rc=0
+out=$( "$BINARY" analyze -t "$MAL_TMP/bad.pcap" 2>&1 ) || rc=$?
+set -e
+assert_exit_code "analyze completes on a malformed pcap" 0 "$rc"
+assert_occurrence_count "malformed pcap yields exactly one failure line" \
+    "Packet data extraction failure" 1 "$out"
+assert_output_contains "the failure line carries the packet total" \
+    "3 packet(s)" "$out"
+rm -rf "$MAL_TMP"
 
 # ---- Summary ----
 echo ""

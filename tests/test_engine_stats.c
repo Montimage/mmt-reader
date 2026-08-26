@@ -288,6 +288,207 @@ static void test_capture_window_supports_bandwidth(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Extraction-failure accounting (issue #69)                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Capture everything the given function writes to stderr.
+ *
+ * The child's stderr carries failure reports, so it is redirected only
+ * around the call itself. The temp file is unlinked immediately; the
+ * descriptor stays readable until closed.
+ *
+ * @return heap-allocated captured text, or NULL when nothing was
+ *         written / setup failed (caller frees)
+ */
+static char *capture_stderr_of(const engine_t *eng,
+                               void (*fn)(const engine_t *)) {
+    char tmpl[] = "/tmp/mmt_ext_summary_XXXXXX";
+    int fd = mkstemp(tmpl);
+    int saved;
+    long size;
+    char *text = NULL;
+
+    if (fd < 0) return NULL;
+    unlink(tmpl);                     /* auto-cleanup; fd remains valid */
+
+    fflush(stderr);
+    saved = dup(STDERR_FILENO);
+    if (saved < 0) {
+        close(fd);
+        return NULL;
+    }
+    if (dup2(fd, STDERR_FILENO) < 0) {
+        close(fd);
+        close(saved);
+        return NULL;
+    }
+
+    fn(eng);
+
+    fflush(stderr);
+    dup2(saved, STDERR_FILENO);
+    close(saved);
+
+    size = lseek(fd, 0, SEEK_END);
+    if (size > 0 && lseek(fd, 0, SEEK_SET) == 0) {
+        text = calloc(1, (size_t)size + 1);
+        if (text != NULL && read(fd, text, (size_t)size) < 0) {
+            free(text);
+            text = NULL;
+        }
+    }
+    close(fd);
+    return text;
+}
+
+/** Occurrences of needle in haystack (NULL-safe) */
+static int count_substrings(const char *haystack, const char *needle) {
+    int n = 0;
+    const char *p = haystack;
+    size_t len = strlen(needle);
+
+    if (p == NULL || len == 0) return 0;
+    while ((p = strstr(p, needle)) != NULL) {
+        n++;
+        p += len;
+    }
+    return n;
+}
+
+/**
+ * Feed one deliberately unparseable frame.
+ *
+ * MMT-DPI tolerates short or zero-filled frames, so the reliable
+ * failure shapes are used instead: zero-length captures and an
+ * inconsistent record (captured more bytes than were on the wire).
+ */
+static int feed_malformed(engine_t *eng, long ts_sec,
+                          unsigned int caplen, unsigned int len) {
+    struct pkthdr header;
+    u_char junk[64];
+
+    memset(junk, 0xDE, sizeof(junk));
+    memset(&header, 0, sizeof(header));
+    header.ts.tv_sec  = ts_sec;
+    header.ts.tv_usec = 1;
+    header.caplen     = caplen;
+    header.len        = len;
+    return engine_process_packet(eng, &header, junk);
+}
+
+/*
+ * Every unparseable packet bumps the counter; parseable ones do not.
+ * The old behaviour logged each failure, so the count also pins the
+ * number the shutdown summary will report.
+ */
+static void test_extraction_failure_counter(void) {
+    char errbuf[1024];
+    engine_t *eng;
+    engine_stats_t stats;
+    struct pcap_pkthdr p_pkthdr;
+    const u_char *data;
+    pcap_t *pcap;
+    int ok;
+
+    eng = engine_create(DLT_EN10MB, 0, errbuf);
+    if (eng == NULL) {
+        fprintf(TEST_FAIL_OUT, "  FAIL: engine_create failed: %s\n", errbuf);
+        scenario_fail++;
+        return;
+    }
+
+    ASSERT_TRUE(engine_extraction_failures(eng) == 0,
+                "a fresh engine counts zero extraction failures");
+
+    /* Both known failure shapes: empty capture, captured > wire length */
+    ASSERT_EQ(0, feed_malformed(eng, 100, 0, 0),
+              "a zero-length capture fails extraction");
+    ASSERT_EQ(0, feed_malformed(eng, 101, 40, 10),
+              "an inconsistent record (caplen > len) fails extraction");
+    ASSERT_TRUE(engine_extraction_failures(eng) == 2,
+                "two failed extractions are counted");
+
+    /* A well-formed packet must leave the failure counter untouched */
+    pcap = pcap_open_offline(TRACE_FILE, errbuf);
+    if (pcap == NULL) {
+        fprintf(TEST_FAIL_OUT, "  FAIL: could not open %s\n", TRACE_FILE);
+        scenario_fail++;
+        engine_destroy(eng);
+        return;
+    }
+    data = pcap_next(pcap, &p_pkthdr);
+    if (data == NULL) {
+        fprintf(TEST_FAIL_OUT, "  FAIL: %s holds no packets\n", TRACE_FILE);
+        scenario_fail++;
+        pcap_close(pcap);
+        engine_destroy(eng);
+        return;
+    }
+    {
+        struct pkthdr header;
+        header.ts     = p_pkthdr.ts;
+        header.caplen = p_pkthdr.caplen;
+        header.len    = p_pkthdr.len;
+        ok = engine_process_packet(eng, &header, data);
+    }
+    pcap_close(pcap);
+
+    ASSERT_EQ(1, ok, "a real trace packet parses cleanly");
+    ASSERT_TRUE(engine_extraction_failures(eng) == 2,
+                "a successful extraction does not bump the failure count");
+
+    engine_get_stats(eng, &stats);
+    ASSERT_U64_EQ(3, stats.nb_packets,
+                  "failed extractions still count as offered packets");
+
+    engine_destroy(eng);
+}
+
+/*
+ * The shutdown summary replaces per-packet logging: exactly one line
+ * when failures occurred, none at all on clean runs (#69).
+ */
+static void test_extraction_failure_summary(void) {
+    char errbuf[1024];
+    engine_t *eng;
+    char *captured;
+
+    eng = engine_create(DLT_EN10MB, 0, errbuf);
+    if (eng == NULL) {
+        fprintf(TEST_FAIL_OUT, "  FAIL: engine_create failed: %s\n", errbuf);
+        scenario_fail++;
+        return;
+    }
+
+    /* Clean run: silence — no summary line at all */
+    captured = capture_stderr_of(eng, engine_print_stats);
+    ASSERT_TRUE(count_substrings(captured, "extraction failure") == 0,
+                "no extraction-failure summary on a clean run");
+    free(captured);
+
+    /* Two malformed packets, then the summary says so — once */
+    ASSERT_EQ(0, feed_malformed(eng, 200, 0, 0), "malformed frame 1 fails");
+    ASSERT_EQ(0, feed_malformed(eng, 201, 40, 10), "malformed frame 2 fails");
+
+    captured = capture_stderr_of(eng, engine_print_stats);
+    ASSERT_TRUE(captured != NULL, "the failure summary is emitted");
+    ASSERT_EQ(1, count_substrings(captured, "extraction failure"),
+              "exactly one summary line, not one per packet");
+    ASSERT_TRUE(captured != NULL && strstr(captured, "2 packet(s)") != NULL,
+                "the summary line reports how many packets failed");
+    free(captured);
+
+    /* The summary is repeatable per report — the count never decays */
+    captured = capture_stderr_of(eng, engine_print_extraction_summary);
+    ASSERT_EQ(1, count_substrings(captured, "extraction failure"),
+              "the standalone summary reports the same total");
+    free(captured);
+
+    engine_destroy(eng);
+}
+
+/* ------------------------------------------------------------------ */
 /* Scenario runner                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -352,6 +553,10 @@ int main(void) {
                  test_aggregate_on_capture_path);
     run_scenario("capture window supports a non-zero bandwidth",
                  test_capture_window_supports_bandwidth);
+    run_scenario("extraction failures are counted, not logged (#69)",
+                 test_extraction_failure_counter);
+    run_scenario("shutdown summarizes extraction failures once (#69)",
+                 test_extraction_failure_summary);
 
     printf("\n=== Results ===\n");
     printf("Run:  %d\n", scenarios_run);

@@ -120,7 +120,7 @@ main() (mmtReader.c)
   ├── engine_create()           — Create MMT-DPI engine (core/engine.c)
   ├── engine_set_*_classify()   — Configure classification modes
   ├── engine_set_output_format() — Set TEXT or JSON output
-  ├── signal(SIGINT)            — Install signal handler
+  ├── sigaction(SIGINT, SIGTERM) — Install shared signal handler
   ├── if (analyze):
   │     └── pcap_open_offline() + engine_process_packet() loop
   ├── else if (capture):
@@ -190,7 +190,7 @@ if (value != NULL) {
 - **Naming:** `snake_case` for functions and variables, `UPPER_SNAKE_CASE` for macros, `camelCase` for struct members.
 - **Error handling:** `fprintf(stderr, ...)` followed by `return EXIT_FAILURE` for fatal errors; return codes for recoverable errors.
 - **Memory:** `malloc`/`free` used in the protocol statistics linked list (`proto_info_t`). Cleanup in `engine_destroy()`.
-- **Signals:** `SIGINT` is caught to ensure clean statistics output and resource cleanup before exit.
+- **Signals:** `SIGINT` and `SIGTERM` are caught through a shared async-safe handler to ensure clean statistics output and resource cleanup before exit.
 - **Output separation:** `cli/output.c/h` handles all output rendering, keeping `core/engine.c` focused on DPI logic.
 - **Color support:** `utils/colors.c/h` provides ANSI color helpers that respect `NO_COLOR` env var and `--no-color` flag.
 
