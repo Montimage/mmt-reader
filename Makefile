@@ -75,6 +75,12 @@ test: build
 	@echo "=== Test 5: Config unit tests ==="
 	gcc -g -o test_config tests/test_config.c config.c -I. && ./test_config && rm -f test_config
 	@echo ""
+	@echo "=== Test 5b: Anomaly detection unit tests ==="
+	gcc -g -o test_anomaly tests/test_anomaly.c core/engine.c cli/output.c \
+		utils/colors.c utils/version.c \
+		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
+		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_anomaly && rm -f test_anomaly
+	@echo ""
 	@echo "=== Test 6: Parse unit tests ==="
 	gcc -g -o test_parse tests/test_parse.c cli/parse.c config.c -I. -I./utils && ./test_parse && rm -f test_parse
 	@echo ""
