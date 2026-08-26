@@ -8,7 +8,6 @@ pipeline {
     stages {
         stage("setup_enviroment") {
             steps {
-                bitbucketStatusNotify(buildState: 'INPROGRESS')
                 sh 'apt-get update -y'
                 sh 'apt-get install -y git build-essential gcc cmake make gdb jq'
                 sh 'gcc --version'
@@ -17,13 +16,11 @@ pipeline {
 
         stage("install_dependencies") {
             steps {
-                bitbucketStatusNotify(buildState: 'INPROGRESS')
                 sh 'apt-get install -y libpcap-dev'
             }
         }
         stage("install_dpi") {
             steps {
-                bitbucketStatusNotify(buildState: 'INPROGRESS')
                 sh 'dpkg -i /mmt-sdk/sdk/*.deb'
                 sh 'ldconfig'
             }
@@ -31,21 +28,18 @@ pipeline {
 
         stage("compile") {
             steps {
-                bitbucketStatusNotify(buildState: 'INPROGRESS')
                 sh 'cd /mmt-reader/ && make'
                 sh 'ls /mmt-reader'
             }
         }
         stage("test") {
             steps {
-                bitbucketStatusNotify(buildState: 'INPROGRESS')
                 sh 'cd /mmt-reader/ && make test'
             }
         }
 
         stage("create_installation") {
             steps {
-                bitbucketStatusNotify(buildState: 'INPROGRESS')
                 // sh 'cd /mmt-http/ && make deb'
             }
         }
@@ -53,11 +47,9 @@ pipeline {
     post {
         success {
             echo 'Do something when it is successful'
-            bitbucketStatusNotify(buildState: 'SUCCESSFUL')
         }
         failure {
             echo 'Do something when it is failed'
-            bitbucketStatusNotify(buildState: 'FAILED')
         }
     }
 
