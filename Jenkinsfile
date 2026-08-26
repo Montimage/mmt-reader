@@ -10,7 +10,7 @@ pipeline {
             steps {
                 bitbucketStatusNotify(buildState: 'INPROGRESS')
                 sh 'apt-get update -y'
-                sh 'apt-get install -y git build-essential gcc cmake make gdb'
+                sh 'apt-get install -y git build-essential gcc cmake make gdb jq'
                 sh 'apt-get install -y software-properties-common'
                 sh 'apt-get install -y build-essential'
                 sh 'add-apt-repository -y ppa:ubuntu-toolchain-r/test'
@@ -44,7 +44,7 @@ pipeline {
         stage("test") {
             steps {
                 bitbucketStatusNotify(buildState: 'INPROGRESS')
-                // sh 'cd /mmt-http/ && make test'
+                sh 'cd /mmt-reader/ && make test'
             }
         }
 
