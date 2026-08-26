@@ -309,9 +309,8 @@ else
         run ldconfig
         info "MMT-DPI installed from ${MMT_DPI_PATH}."
 
-    elif [[ -f "${MMT_DPI_SRC}/sdk/mmt-dpi_*.deb" ]]; then
-        # Use pre-built .deb from local repo
-        DEB_FILE="$(ls "${MMT_DPI_SRC}/sdk/mmt-dpi_*.deb" | head -1)"
+    elif DEB_FILE="$(compgen -G "${MMT_DPI_SRC}/sdk/mmt-dpi_*.deb" | head -n1 || true)" && [[ -n "${DEB_FILE}" ]]; then
+        # Use pre-built .deb from local repo (glob expanded via compgen — F-BUG-006)
         info "Installing MMT-DPI from ${DEB_FILE}"
         run dpkg -i "${DEB_FILE}"
         run ldconfig
