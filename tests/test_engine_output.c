@@ -42,6 +42,16 @@
 #define TEST_SCENARIO_MODE
 #include "test_util.h"
 
+/*
+ * Forked children _exit() below, skipping libgcov's atexit-based write;
+ * dump counters explicitly. Only compiled in --coverage builds (see
+ * COV_FLAGS in the Makefile) — the symbol lives in libgcov, which plain
+ * builds do not link.
+ */
+#ifdef COVERAGE_BUILD
+extern void __gcov_dump(void);
+#endif
+
 /* ------------------------------------------------------------------ */
 /* stdout capture                                                      */
 /* ------------------------------------------------------------------ */
@@ -388,6 +398,9 @@ static void run_scenario(const char *name, void (*fn)(void)) {
         scenario_fail = 0;
         fn();
         fflush(stdout);
+#ifdef COVERAGE_BUILD
+        __gcov_dump();
+#endif
         _exit(scenario_fail > 100 ? 100 : scenario_fail);
     }
 

@@ -7,6 +7,7 @@ MMT-DPI SDK and reports protocol stats as text or JSON.
 
 - Build: `make` — produces `./mmtReader`; exit 0 = success. `make clean` removes it.
 - Test: `make test` — builds first, then runs 13 numbered test groups defined in `Makefile`.
+- Coverage: `make coverage` — reruns the suite with instrumented unit-test binaries and prints a per-source gcov summary (see AGENT_ENVIRONMENT.md).
 - Both commands are the whole verification loop; there is no lint/typecheck target.
 
 ## Prerequisites (not inferable from this repo)

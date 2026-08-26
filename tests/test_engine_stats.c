@@ -54,6 +54,16 @@
 #define TEST_FAIL_OUT stderr
 #include "test_util.h"
 
+/*
+ * Forked children _exit() below, skipping libgcov's atexit-based write;
+ * dump counters explicitly. Only compiled in --coverage builds (see
+ * COV_FLAGS in the Makefile) — the symbol lives in libgcov, which plain
+ * builds do not link.
+ */
+#ifdef COVERAGE_BUILD
+extern void __gcov_dump(void);
+#endif
+
 /** Discard the child's stdout; the summary printed there is not the subject */
 static void silence_stdout(void) {
     fflush(stdout);
@@ -310,6 +320,9 @@ static void run_scenario(const char *name, void (*fn)(void)) {
         silence_stdout();
         fn();
         fflush(stdout);
+#ifdef COVERAGE_BUILD
+        __gcov_dump();
+#endif
         _exit(scenario_fail > 100 ? 100 : scenario_fail);
     }
 

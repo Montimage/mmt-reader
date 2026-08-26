@@ -10,6 +10,19 @@ make test
 
 This runs the full test suite: unit tests for config and parsing, integration tests for CLI behavior, and completion file checks.
 
+## Coverage
+
+```bash
+make coverage
+```
+
+Reruns the suite with the unit-test binaries rebuilt via `--coverage`
+(`TEST_CFLAGS='-g --coverage -DCOVERAGE_BUILD'`) and prints a per-source
+line/branch summary using plain `gcov`. Forked-scenario suites
+(`test_engine_output.c`, `test_engine_stats.c`) dump their counters explicitly
+in coverage builds because `_exit()` skips libgcov's usual write. The default
+build is untouched; artifacts are cleaned up when the target finishes.
+
 ## Test Targets
 
 | Target | File | Type | Description |
