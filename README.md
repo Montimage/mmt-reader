@@ -390,15 +390,18 @@ MMT-Reader analyzes network traffic from pcap capture files or live network inte
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y build-essential gcc g++ make libpcap-dev libconfuse-dev
+sudo apt-get install -y build-essential gcc g++ make libpcap-dev libconfuse-dev jq
 ```
 
 **RHEL / CentOS / Fedora:**
 
 ```bash
 sudo yum group install "Development Tools"
-sudo yum install libpcap-devel
+sudo yum install libpcap-devel jq
 ```
+
+`jq` (≥ 1.7) is a **test-time** requirement only: `make test` pipes the tool's
+JSON output through it. It is not needed to build or run mmtReader itself.
 
 #### MMT-DPI Library
 
@@ -415,6 +418,9 @@ MMT-Reader requires the [MMT-DPI](https://bitbucket.org/montimage/mmt-dpi) libra
 ```
 
 Install MMT-DPI following the upstream instructions before compiling.
+
+**Minimum version: 1.8.0.** The build aborts with an explicit error when the
+installed SDK is missing or older (`make check-sdk`).
 
 #### Compile
 

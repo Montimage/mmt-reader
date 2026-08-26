@@ -53,6 +53,9 @@ SDK**. It is *not* in this repository and *not* on any public package registry.
 
 - **Source:** sibling checkout `../mmt-dpi` next to this repository
   (Montimage-internal; not needed to build, only to modify the SDK).
+- **Minimum:** `1.8.0`. `make` runs a `check-sdk` step that aborts with an
+  explicit error when the installed SDK is missing or older (override the
+  install location with `make MMT_DPI=/path/to/sdk`).
 - **Known quirk:** stale `1.7.10` shared objects sit alongside the current
   `1.8.0` ones in `/opt/mmt/dpi/lib`. The linker resolves `-lmmt_core` through
   `libmmt_core.so`, a symlink to `libmmt_core.so.auto` — currently the 1.8.0
