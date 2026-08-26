@@ -200,17 +200,17 @@ When `--json` is used, `cli/output.c` renders the same statistics as structured 
 ### Signal Handling
 
 ```c
-signal(SIGINT, signal_handler);
+struct sigaction sa;
+memset(&sa, 0, sizeof(sa));
+sa.sa_handler = signal_handler;
+sigemptyset(&sa.sa_mask);
+sigaction(SIGINT, &sa, NULL);
+sigaction(SIGTERM, &sa, NULL);
 ```
 
-Ctrl+C triggers `signal_handler()`, which calls `clean()`:
-1. Print statistics (same as normal exit)
-2. Close MMT handler (`mmt_close_handler`)
-3. Close extraction framework (`close_extraction`)
-4. Print PCAP drop stats
-5. Close pcap handle (`pcap_close`)
-
-The `cleaned` guard prevents double-cleanup.
+Ctrl+C (`SIGINT`) and `SIGTERM` (systemd stop, plain `kill`) share the
+same async-safe handler. It sets a flag and breaks `pcap_loop`, so the
+run ends through the normal shutdown path:
 
 ---
 

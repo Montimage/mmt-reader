@@ -114,8 +114,19 @@ int main(int argc, char **argv) {
     engine_set_output_format(eng, (output_format_t)opts.output_format);
     engine_set_show_sessions(eng, opts.show_sessions);
 
-    /* Set up signal handling */
-    signal(SIGINT, signal_handler);
+    /* Set up signal handling: SIGINT and SIGTERM share the same
+     * async-safe handler so systemd stop / plain kill shut down as
+     * gracefully as Ctrl+C, with statistics and cleanup (issue #57).
+     * sigaction without SA_RESTART lets pcap_loop return promptly;
+     * the handler additionally breaks the loop itself. */
+    {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = signal_handler;
+        sigemptyset(&sa.sa_mask);
+        sigaction(SIGINT, &sa, NULL);
+        sigaction(SIGTERM, &sa, NULL);
+    }
 
     /* Dispatch based on mode */
     if (opts.mode == 1) {
@@ -142,9 +153,9 @@ int main(int argc, char **argv) {
                 header.ts = p_pkthdr.ts;
                 header.caplen = p_pkthdr.caplen;
                 header.len = p_pkthdr.len;
-                if (!engine_process_packet(eng, &header, data)) {
-                    fprintf(stderr, "Packet data extraction failure.\n");
-                }
+                /* Extraction failures are counted by the engine and
+                 * reported once at shutdown (issue #69) */
+                (void)engine_process_packet(eng, &header, data);
             }
             if (opts.verbose) {
                 fprintf(stderr, "DEBUG: processed %d packets\n", pkt_count);
@@ -222,8 +233,10 @@ int main(int argc, char **argv) {
                     break;
                 }
             }
-        } else {
-            /* Continuous capture until signal */
+        } else if (!got_signal) {
+            /* Continuous capture until signal. The guard closes the
+             * race where SIGINT/SIGTERM arrives before the loop starts:
+             * pcap_breakloop() only helps once the handle is looping. */
             pcap_loop(pcap, -1, capture_callback, NULL);
         }
         capture_close(pcap);

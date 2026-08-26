@@ -70,6 +70,7 @@ struct engine {
     output_format_t output_format;/**< Output format (TEXT/JSON)     */
     int show_sessions;            /**< Show per-protocol sessions    */
     anomaly_ctx_t *anomaly_ctx;   /**< Anomaly detection context     */
+    unsigned long extract_failures; /**< Packets the DPI could not parse */
 };
 
 /* Module-level proto_path_detail (shared by output_print_stats) */
@@ -225,6 +226,13 @@ int engine_process_packet(engine_t *eng,
     /* Cast away const — packet_process expects non-const per MMT-DPI API */
     int result = packet_process(eng->mmt, (struct pkthdr *)hdr, (u_char *)data) ? 1 : 0;
 
+    /* Count failures instead of logging per packet: under random or
+     * hostile traffic a per-packet fprintf floods the logs (#69). The
+     * total is reported once at shutdown. */
+    if (!result) {
+        eng->extract_failures++;
+    }
+
     /* Run anomaly detection hook after packet processing */
     if (eng->anomaly_ctx != NULL && result) {
         anomaly_result_t anomaly;
@@ -250,9 +258,9 @@ void engine_live_callback(u_char *user,
     header.caplen = p_pkthdr->caplen;
     header.len = p_pkthdr->len;
 
-    if (!engine_process_packet(eng, &header, data)) {
-        fprintf(stderr, "Packet data extraction failure.\n");
-    }
+    /* Failures are counted by engine_process_packet() and reported
+     * once at shutdown (issue #69) */
+    (void)engine_process_packet(eng, &header, data);
 }
 
 void engine_get_stats(const engine_t *eng, engine_stats_t *out) {
@@ -291,9 +299,29 @@ void engine_print_stats_ex(const engine_t *eng, FILE *fp,
                           format, show_sessions, &stats);
 }
 
+unsigned long engine_extraction_failures(const engine_t *eng) {
+    return (eng == NULL) ? 0 : eng->extract_failures;
+}
+
+void engine_print_extraction_summary(const engine_t *eng) {
+    if (eng == NULL) return;
+
+    /* Silent on clean runs; one line total otherwise. Goes to stderr
+     * so stdout stays a single document under --json. */
+    if (eng->extract_failures > 0) {
+        fprintf(stderr,
+                "INFO: Packet data extraction failure for %lu packet(s)\n",
+                eng->extract_failures);
+    }
+}
+
 void engine_print_stats(const engine_t *eng) {
     if (eng == NULL) return;
     engine_print_stats_ex(eng, stdout, eng->output_format, eng->show_sessions);
+
+    /* Shutdown summary: exactly one line per run, in both the analyze
+     * and capture paths, since both print statistics exactly once */
+    engine_print_extraction_summary(eng);
 }
 
 void engine_destroy(engine_t *eng) {

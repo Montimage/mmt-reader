@@ -276,9 +276,11 @@ static void process_frame(const struct pcap_pkthdr *p_pkthdr, const u_char *data
         ok = packet_process(g_mmt, &header, data) ? 1 : 0;
     }
 
-    if (!ok) {
-        fprintf(stderr, "Packet data extraction failure.\n");
-    }
+    /* No per-packet logging here (#69): production paths always route
+     * through a processor backed by the engine, which counts extraction
+     * failures and reports them once at shutdown. This legacy fallback
+     * (processor cleared) exists for tests only and stays silent. */
+    (void)ok;
 }
 
 void capture_callback(u_char *user, const struct pcap_pkthdr *p_pkthdr, const u_char *data) {

@@ -194,9 +194,35 @@ void engine_print_stats_ex(const engine_t *eng, FILE *fp,
  * output format, honouring engine_set_output_format() and
  * engine_set_show_sessions().
  *
+ * Also emits the extraction-failure summary (one stderr line, only
+ * when failures occurred) so every run reports unparseable packets
+ * exactly once at shutdown instead of per packet.
+ *
  * @param eng  Engine handle
  */
 void engine_print_stats(const engine_t *eng);
+
+/**
+ * Number of packets the DPI could not parse so far.
+ *
+ * Failures are counted per packet inside engine_process_packet(); a
+ * single summary line is printed at shutdown rather than logging each
+ * occurrence, which would flood logs under hostile traffic (#69).
+ *
+ * @param eng  Engine handle (NULL is safe, yields 0)
+ * @return     Count of failed extractions
+ */
+unsigned long engine_extraction_failures(const engine_t *eng);
+
+/**
+ * Print the extraction-failure summary to stderr — one line, and none
+ * at all when no packet failed to parse. Called by
+ * engine_print_stats(); expose it for callers that report statistics
+ * through another channel.
+ *
+ * @param eng  Engine handle (NULL is safe)
+ */
+void engine_print_extraction_summary(const engine_t *eng);
 
 /**
  * Print pcap capture statistics (received, dropped, etc.).
