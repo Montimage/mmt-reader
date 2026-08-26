@@ -36,8 +36,15 @@ assert_check() {
     rc=$?
     tests_run=$((tests_run + 1))
 
-    if [ "$rc" != "$want_rc" ]; then
-        report_fail "$desc (expected exit $want_rc, got $rc; output: $output)"
+    # A failed recipe makes the sub-make exit 2 regardless of the recipe's
+    # own exit status, so failure cases assert any non-zero status.
+    if [ "$want_rc" = "0" ]; then
+        if [ "$rc" -ne 0 ]; then
+            report_fail "$desc (expected exit 0, got $rc; output: $output)"
+            return
+        fi
+    elif [ "$rc" -eq 0 ]; then
+        report_fail "$desc (expected non-zero exit, got 0)"
         return
     fi
     if [ -n "$want_pattern" ] && ! printf '%s' "$output" | grep -qE "$want_pattern"; then
