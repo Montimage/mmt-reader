@@ -430,7 +430,10 @@ static void output_json_stats(FILE *fp,
     }
     fprintf(fp, "\n  ]\n");
 
-    /* Anomaly detection section (placeholder for future extension) */
+    /* Anomaly detection section — intentionally always empty: the
+     * default detector is a documented no-op (anomaly_detect() in
+     * core/engine.c), so JSON carries a constant empty array until
+     * a real detector replaces it (#65). */
     fprintf(fp, ",\n  \"anomalies\": []\n");
 
     /* Close JSON object */

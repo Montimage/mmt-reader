@@ -10,7 +10,6 @@
 
 #include <stdint.h>
 #include <sys/time.h>
-#include <pcap.h>
 #include "mmt_core.h"
 
 /* ------------------------------------------------------------------ */
@@ -155,18 +154,6 @@ int engine_process_packet_cb(void *ctx,
                              const struct pkthdr *hdr,
                              const u_char *data);
 
-/**
- * Process a packet via the legacy callback interface.
- * Used internally by pcap_loop callbacks.
- *
- * @param user  Opaque user data (engine_t pointer)
- * @param p_pkthdr  libpcap packet header
- * @param data  Raw packet bytes
- */
-void engine_live_callback(u_char *user,
-                          const struct pcap_pkthdr *p_pkthdr,
-                          const u_char *data);
-
 /* ------------------------------------------------------------------ */
 /* Statistics                                                          */
 /* ------------------------------------------------------------------ */
@@ -223,12 +210,6 @@ unsigned long engine_extraction_failures(const engine_t *eng);
  * @param eng  Engine handle (NULL is safe)
  */
 void engine_print_extraction_summary(const engine_t *eng);
-
-/**
- * Print pcap capture statistics (received, dropped, etc.).
- * @param pcs  pcap_stat structure from pcap_stats()
- */
-void engine_print_pcap_stats(const struct pcap_stat *pcs);
 
 /* ------------------------------------------------------------------ */
 /* Anomaly detection (future extension)                                */

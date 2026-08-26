@@ -124,7 +124,7 @@ main() (mmtReader.c)
   ├── if (analyze):
   │     └── pcap_open_offline() + engine_process_packet() loop
   ├── else if (capture):
-  │     └── capture_init() + pcap_loop(engine_live_callback)
+  │     └── capture_init() + pcap_loop(capture_callback → engine_process_packet_cb)
   └── engine_destroy()          — Cleanup all resources
 ```
 

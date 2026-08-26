@@ -58,14 +58,17 @@ while ((data = pcap_next(pcap, &p_pkthdr))) {
 
 ```c
 pcap = capture_init(iface, buffer_mb, 65535);
-pcap_loop(pcap, -1, engine_live_callback, (u_char*)eng);
+capture_set_processor(engine_process_packet_cb, eng);
+pcap_loop(pcap, -1, capture_callback, NULL);
 ```
 
 - Creates a pcap handle via `capture_init()` (`capture.c`)
 - Sets promiscuous mode (`pcap_set_promisc(my_pcap, 1)`)
 - Sets buffer size (default 50 MB, configurable via `-b`)
 - Captures with snaplen 65535
-- Registers `engine_live_callback` for `pcap_loop()`
+- Registers `capture_callback` for `pcap_loop()`; it converts each
+  libpcap header to MMT format and dispatches to
+  `engine_process_packet_cb()` (`core/engine.c`)
 
 **Characteristics:** Real-time, requires root/admin privileges, Ethernet-only (DLT_EN10MB check).
 
@@ -119,7 +122,6 @@ The core DPI call. `engine_process_packet()` (`core/engine.c`) delegates to MMT-
 | Callback | Module | Trigger | Purpose |
 |----------|--------|---------|---------|
 | `engine_process_packet_cb` | core/engine.c | Every captured frame (online) | Records the packet in the capture window, then hands it to MMT-DPI |
-| `engine_live_callback` | core/engine.c | Every raw packet (online) | Converts a raw pcap packet to MMT format and calls `engine_process_packet()` |
 | `flows_packet_handler` | flows.c | Every processed packet, when `-F` is used | Records the packet's DPI session for the top-talker report |
 
 Packet, session and volume counters are **not** maintained here: MMT-DPI keeps them, and `engine_get_stats()` reads them back (see below).
@@ -237,8 +239,7 @@ run ends through the normal shutdown path:
         │
         ▼
   cli/output.c
-  ├── output_print_stats_ex() — format and print (TEXT or JSON)
-  └── engine_print_pcap_stats() — drop counts
+  └── output_print_stats_ex() — format and print (TEXT or JSON)
         │
         ▼
   engine_destroy() — cleanup resources

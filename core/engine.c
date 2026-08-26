@@ -17,12 +17,18 @@
 #include "output.h"
 
 /* ------------------------------------------------------------------ */
-/* Anomaly detection default implementation                            */
+/* Anomaly detection — deliberate no-op extension point                */
 /* ------------------------------------------------------------------ */
 
 /**
  * Default no-op anomaly detection context.
- * Future implementations can extend this struct with detection state.
+ *
+ * This hook is a deliberate, documented no-op extension point (#65):
+ * anomaly_detect() always reports ANOMALY_NONE for every packet, so
+ * the JSON output carries a constant empty array ("anomalies": [],
+ * emitted by cli/output.c). The unit tests in tests/test_anomaly.c
+ * pin this contract; a future detector replaces the default
+ * implementation without touching callers.
  */
 struct anomaly_ctx {
     int enabled;  /**< Whether anomaly detection is active */
@@ -247,20 +253,6 @@ int engine_process_packet_cb(void *ctx,
                              const struct pkthdr *hdr,
                              const u_char *data) {
     return engine_process_packet((engine_t *)ctx, hdr, data);
-}
-
-void engine_live_callback(u_char *user,
-                          const struct pcap_pkthdr *p_pkthdr,
-                          const u_char *data) {
-    engine_t *eng = (engine_t *)user;
-    struct pkthdr header;
-    header.ts = p_pkthdr->ts;
-    header.caplen = p_pkthdr->caplen;
-    header.len = p_pkthdr->len;
-
-    /* Failures are counted by engine_process_packet() and reported
-     * once at shutdown (issue #69) */
-    (void)engine_process_packet(eng, &header, data);
 }
 
 void engine_get_stats(const engine_t *eng, engine_stats_t *out) {

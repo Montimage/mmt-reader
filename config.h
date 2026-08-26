@@ -29,11 +29,7 @@
 #include <stdio.h>
 
 #define CONFIG_MAX_PATH 512
-#define CONFIG_MAX_SECTIONS 8
-#define CONFIG_MAX_ENTRIES 32
 #define CONFIG_MAX_LINE 256
-#define CONFIG_MAX_KEY 64
-#define CONFIG_MAX_VAL 128
 
 /* Config file sections */
 typedef enum {
