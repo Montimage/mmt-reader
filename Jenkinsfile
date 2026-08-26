@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'ubuntu'
+            image 'ubuntu:24.04'
             args '-u root:sudo -v $HOME/workspace/mmt-reader:/mmt-reader -v $HOME/workspace/mmt-sdk:/mmt-sdk'
         }
     }
@@ -23,7 +23,7 @@ pipeline {
         stage("install_dependencies") {
             steps {
                 bitbucketStatusNotify(buildState: 'INPROGRESS')
-                sh 'apt-get install -y libpcap-dev libconfuse-dev'
+                sh 'apt-get install -y libpcap-dev'
             }
         }
         stage("install_dpi") {
