@@ -40,7 +40,7 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 ### What is granted
 
 `install.sh` applies the Linux file capability `cap_net_raw+ep` to the installed
-binary (`install.sh:403`, Phase 5):
+binary (`install.sh:405`, Phase 5):
 
 ```bash
 sudo setcap 'cap_net_raw+ep' /usr/local/bin/mmtReader
@@ -103,7 +103,7 @@ sudo setcap -r /usr/local/bin/mmtReader
 Notes:
 
 - `./install.sh --uninstall` runs the same removal automatically before deleting
-  the binary (`install.sh:165`).
+  the binary (`install.sh:166`).
 - Removing the capability makes live capture fall back to requiring `sudo`;
   offline pcap analysis (`mmtReader -t file.pcap ...`) is unaffected.
 - Re-running the installer re-applies the capability. Likewise, replacing or
