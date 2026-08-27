@@ -348,10 +348,25 @@ CFLAGS="-g -O2"
 # All source files (matches Makefile)
 SRCS="mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c flows.c config.c"
 
+# mmtReader's own product version (issue #70, F-BUG-005) — must be injected here
+# too, or binaries produced by this installer report the 0.0.0-dev fallback.
+# Single source of truth is the Makefile's MMTREADER_VERSION; override with
+# MMTREADER_VERSION=x.y.z ./install.sh
+if [[ -z "${MMTREADER_VERSION:-}" ]]; then
+    MMTREADER_VERSION="$(sed -n 's/^MMTREADER_VERSION[[:space:]]*?\{0,1\}=[[:space:]]*\([^[:space:]]*\).*/\1/p' \
+        "${SCRIPT_DIR}/Makefile" 2>/dev/null | head -n1)"
+fi
+if [[ -z "${MMTREADER_VERSION}" ]]; then
+    warn "Could not read MMTREADER_VERSION from Makefile; falling back to 0.0.0-dev."
+    MMTREADER_VERSION="0.0.0-dev"
+fi
+VERSION_DEFS="-DMMTREADER_VERSION=\"${MMTREADER_VERSION}\""
+info "mmtReader product version: ${MMTREADER_VERSION}"
+
 if $DRY_RUN; then
-    echo -e "${YELLOW}[DRY-RUN]${NC} ${CC} ${CFLAGS} -o mmtReader ${SRCS} -I\".\" -I\"${MMT_DPI_INC}\" -I\"./utils\" -I\"./cli\" -L\"${MMT_DPI_LIB}\" -lmmt_core -ldl -lpcap"
+    echo -e "${YELLOW}[DRY-RUN]${NC} ${CC} ${CFLAGS} ${VERSION_DEFS} -o mmtReader ${SRCS} -I\".\" -I\"${MMT_DPI_INC}\" -I\"./utils\" -I\"./cli\" -L\"${MMT_DPI_LIB}\" -lmmt_core -ldl -lpcap"
     info "mmtReader would be compiled (dry-run)."
-elif ! ${CC} ${CFLAGS} -o mmtReader ${SRCS} \
+elif ! ${CC} ${CFLAGS} "${VERSION_DEFS}" -o mmtReader ${SRCS} \
         -I"." -I"${MMT_DPI_INC}" -I"./utils" -I"./cli" \
         -L"${MMT_DPI_LIB}" \
         -lmmt_core -ldl -lpcap; then

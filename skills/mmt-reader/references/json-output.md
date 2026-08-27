@@ -53,7 +53,7 @@ Full shape returned by `--json`. Read this when you need a field the table in SK
 
 ## Field gotchas
 
-Verified against mmtReader 1.8.0 (42cac8b7) on `smallFlows.pcap`.
+Verified against mmtReader 0.3.0 (MMT-DPI SDK 1.8.0 (42cac8b7)) on `smallFlows.pcap`.
 
 - **The session fields say different things.** `ipv4_sessions`/`ipv6_sessions`/`total_sessions` count every session seen over the whole capture; `active_sessions` counts only those that had not timed out when the run ended, so it is always the smaller number. The `ipv4_*`, `ipv6_*` and `active_*` fields appear only with `-s`.
 - **`-a` adds `protocol_paths`, nothing else.** Without it the document has no `protocol_paths` key at all; `protocols[]` is populated either way.
