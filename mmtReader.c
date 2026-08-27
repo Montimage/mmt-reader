@@ -26,6 +26,7 @@
 #include "flows.h"
 
 static volatile sig_atomic_t got_signal = 0;
+static volatile sig_atomic_t duration_done = 0;
 
 /* ------------------------------------------------------------------ */
 /* Signal handler                                                      */
@@ -46,6 +47,8 @@ static void signal_handler(int type) {
     got_signal = 1;
     /* Break out of pcap_loop (async-signal-safe flag set) */
     capture_breakloop();
+    /* Also break out of the timed pcap_dump loop */
+    duration_done = 1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -200,7 +203,41 @@ int main(int argc, char **argv) {
 
         /* Optional top-talker reporting, built from the DPI's sessions */
         flows_t *flows = NULL;
-        if (opts.flows_seconds > 0) {
+
+        /* Duration-based capture with automatic pcap file save (issue #100) */
+        if (opts.duration_seconds > 0) {
+            char pcap_path[512];
+            snprintf(pcap_path, sizeof(pcap_path), "/tmp/mmtreader-%d.pcap", getpid());
+
+            pcap_dumper_t *dump = pcap_dump_open(pcap, pcap_path);
+            if (!dump) {
+                fprintf(stderr, "[error] Cannot create pcap file: %s\n", pcap_path);
+                capture_close(pcap);
+                engine_destroy(eng);
+                return EXIT_FAILURE;
+            }
+
+            fprintf(stdout, "INFO: Captured to %s\n", pcap_path);
+
+            time_t deadline = time(NULL) + opts.duration_seconds;
+            while (!got_signal && !duration_done && time(NULL) < deadline) {
+                struct pcap_pkthdr *hdr;
+                const u_char *data;
+                int next_rc = pcap_next_ex(pcap, &hdr, &data);
+                if (next_rc == 1) {
+                    capture_callback(NULL, hdr, data);
+                    pcap_dump((u_char *)dump, hdr, data);
+                } else if (next_rc < 0) {
+                    if (!got_signal && !duration_done) {
+                        fprintf(stderr, "[error] Capture failed: %s\n",
+                                pcap_geterr(pcap));
+                    }
+                    break;
+                }
+            }
+
+            pcap_dump_close(dump);
+        } else if (opts.flows_seconds > 0) {
             flows = flows_create();
             if (flows == NULL) {
                 fprintf(stderr, "[error] Failed to allocate flow tracker\n");
