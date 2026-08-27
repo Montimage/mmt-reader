@@ -242,8 +242,8 @@ if (value != NULL) {
 ## Coding Conventions
 
 - **Warning-free builds:** `make` compiles with `-Wall -Wextra` (`WARNFLAGS`); new code must not introduce warnings.
-- **Modular architecture:** Code is split across modules (`core/`, `cli/`, `capture/`, `config/`, `utils/`) with clear API boundaries via headers.
-- **Naming:** `snake_case` for functions and variables, `UPPER_SNAKE_CASE` for macros, `camelCase` for struct members.
+- **Modular architecture:** Code is split across `core/`, `cli/` and `utils/` plus the root-level `capture.c/h`, `flows.c/h` and `config.c/h` modules, with clear API boundaries via headers.
+- **Naming:** `snake_case` for functions, variables and struct members; `UPPER_SNAKE_CASE` for macros and enum constants.
 - **Error handling:** `fprintf(stderr, ...)` followed by `return EXIT_FAILURE` for fatal errors; return codes for recoverable errors.
 - **Memory:** `malloc`/`free` used in the protocol statistics linked list (`proto_info_t`). Cleanup in `engine_destroy()`.
 - **Signals:** `SIGINT` and `SIGTERM` are caught through a shared async-safe handler to ensure clean statistics output and resource cleanup before exit.

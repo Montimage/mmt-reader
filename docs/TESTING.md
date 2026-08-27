@@ -16,7 +16,8 @@ suite is compiled with the same `-Wall -Wextra` warning gate as the product
 build, and the suites that report versions also get
 `-DMMTREADER_VERSION='"0.3.0"'`.
 
-`jq` is required — groups 1–4 pipe the tool's JSON output through it.
+`jq` is required — groups 1, 2, 2b and 4 pipe the tool's JSON output
+through it (group 3 greps the text output instead).
 
 ### Expected totals
 
@@ -67,7 +68,7 @@ build is untouched; artifacts are cleaned up when the target finishes.
 | Test 11 | `tests/test_engine_stats.c` | Unit | 5 | Engine statistics aggregation and extraction-failure accounting |
 | Test 12 | `tests/test_cli.sh` | Integration | 35 | CLI end-to-end (env vars, quiet, verbose, input validation, capture contract) |
 | Test 13 | — | Integration | — | Bash, zsh and fish completion files exist |
-| Test 14 | `tests/test_sdk_check.sh` | Unit | 6 | `make check-sdk` accepts ≥ 1.8.0 and rejects older/missing SDKs |
+| Test 14 | `tests/test_sdk_check.sh` | Integration | 6 | `make check-sdk` accepts ≥ 1.8.0 and rejects older/missing SDKs |
 
 ## Unit Tests
 

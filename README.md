@@ -247,7 +247,7 @@ sudo ./mmtReader capture -i wlP9s9 -a -s
 | `-x` | IP address classification | On | Identify services by IP |
 | `-y` | Hostname (SNI) classification | On | Identify by domain name |
 | `-z` | Port number classification | On | Identify by port |
-| `-a` | Show protocol paths | Off | Full hierarchy (TCP.HTTP) |
+| `-a` | Show protocol paths | Off | Full hierarchy (`ethernet.ip.tcp.http`) |
 | `-s` | Session counts | Off | Per-protocol session tracking |
 | `--json` | JSON output | Off | Machine-readable output |
 | `-F <seconds>` | Top flows (capture only) | Off | Capture for N seconds, then print the top sessions by volume |
@@ -322,7 +322,7 @@ MMT-Reader analyzes network traffic from pcap capture files or live network inte
 - **Subcommand interface** — `analyze` for pcap files, `capture` for live interfaces
 - **Dual input modes** — Read from pcap files (offline) or live network interfaces (online)
 - **Per-protocol statistics** — Packet count, data volume, and payload volume for every detected protocol
-- **Protocol path display** — Full DPI path hierarchy (e.g. `TCP.HTTP.Google`) with the `-a/--proto-path` flag
+- **Protocol path display** — Full DPI path hierarchy (e.g. `ethernet.ip.tcp.http.msn`) with the `-a/--proto-path` flag
 - **Top-flow reporting** — Rank the DPI's sessions by volume during a live capture with `capture -F/--flows <seconds>`: application protocol, client and server endpoints, bytes and packets
 - **JSON output** — Machine-readable statistics with `--json`
 - **Three classification strategies** — IP address (`-x`), hostname (`-y`), and port (`-z`) fingerprinting, each independently toggleable
@@ -647,7 +647,7 @@ mmtReader/
 | [TESTING.md](docs/TESTING.md) | Test suite guide and how to run tests |
 | [PLAYBOOK.md](docs/PLAYBOOK.md) | End-to-end agent workflows and JSON recipes |
 | [CHANGELOG.md](CHANGELOG.md) | Live changelog, including the `[Unreleased]` section |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Historical release notes (0.2.x–0.3.0) |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Historical release notes (0.1.0–0.3.0) |
 
 ### Related Publications
 
