@@ -4,6 +4,21 @@
 
 ### Fixed
 
+- Honor the `json` config-file key and the `MMTREADER_JSON` environment variable
+  (#96). `cli_options_t` carried two fields meaning one thing — `output_format`,
+  which every output decision reads, and `json`, whose only reader was a verbose
+  debug printf. The config and environment paths wrote `json` alone, so
+  `json = 1` and `MMTREADER_JSON=1` were silently ignored; only `-j/--json`,
+  which wrote both, had any effect. `json` is gone and `output_format` is now
+  the single carrier.
+- Apply `-c/--config` files **before** the CLI flags are parsed (#96). The named
+  config file used to be re-read after the option loop and re-copied
+  unconditionally, so it beat explicit flags (`-b 100 --config <buffer=777>`
+  used 777) and skipped the environment entirely — the opposite precedence from
+  `~/.mmtreader.conf`. Both files now load before the flags, under one rule:
+  compiled defaults < `~/.mmtreader.conf` < `--config` file < environment <
+  CLI flags. See `docs/CONFIG.md`.
+
 - Report mmtReader's own product version distinctly from the MMT-DPI SDK version
   (#70, `F-BUG-005`). `--version` and the startup banner now print two labeled
   lines, and the product version is injected at build time via

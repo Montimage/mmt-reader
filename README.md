@@ -328,8 +328,9 @@ MMT-Reader analyzes network traffic from pcap capture files or live network inte
 - **Three classification strategies** — IP address (`-x`), hostname (`-y`), and port (`-z`) fingerprinting, each independently toggleable
 - **Real-time monitoring** — Live capture with configurable buffer size (`-b`) and kernel/driver drop reporting
 - **IPv4 & IPv6 session tracking** — Per-protocol session counts with `-s/--sessions`
-- **Config file support** — INI-style `~/.mmtreader.conf` with per-command sections
+- **Config file support** — INI-style `~/.mmtreader.conf`, or any file named with `-c/--config`
 - **Environment variables** — `MMTREADER_JSON`, `MMTREADER_NO_COLOR`, `MMTREADER_QUIET`
+- **One precedence rule** — compiled defaults < `~/.mmtreader.conf` < `--config` file < environment < CLI flags
 - **Graceful shutdown** — Press Ctrl+C to stop live capture and print final statistics
 - **Modular architecture** — Clean separation: engine (core/), CLI parsing (cli/), output rendering (cli/), capture (capture/), config (config/), utilities (utils/)
 
@@ -400,8 +401,8 @@ cc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.3.0"' -o mmtReader mmtReader.c c
 make clean && make test
 ```
 
-Runs 14 numbered test groups (plus sub-groups 2b and 5b): 252 unit asserts,
-35/35 CLI integration checks, and 6/6 SDK-check assertions, ending with
+Runs 14 numbered test groups (plus sub-groups 2b and 5b): 297 unit asserts,
+52/52 CLI integration checks, and 6/6 SDK-check assertions, ending with
 `All tests passed!`. One skip is expected under an unprivileged run — live
 capture on `lo` needs root or `cap_net_raw`. Requires `jq`. See
 [docs/TESTING.md](docs/TESTING.md) for the per-group breakdown.
