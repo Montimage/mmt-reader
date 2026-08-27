@@ -10,6 +10,12 @@ COMPLETIONS ?= $(PREFIX)/share/bash-completion/completions
 CC          ?= gcc
 CFLAGS      ?= -g -O2
 TEST_CFLAGS ?= -g
+
+# Warning gate (issue #71, F-DOCS-003): CONTRIBUTING.md requires warning-free
+# -Wall -Wextra builds. Kept in its own variable — appended to every compile
+# recipe rather than folded into CFLAGS — so an external `make CFLAGS=...`
+# override cannot silently disable the gate.
+WARNFLAGS   ?= -Wall -Wextra
 COV_FLAGS   ?= --coverage -DCOVERAGE_BUILD
 
 MMT_DPI     ?= /opt/mmt/dpi
@@ -51,7 +57,7 @@ check-sdk:
 	echo "MMT-DPI SDK $$sdk_version OK"
 
 $(TARGET): $(SRCS) Makefile
-	$(CC) $(CFLAGS) $(VERSION_DEFS) -o $@ $(SRCS) \
+	$(CC) $(CFLAGS) $(WARNFLAGS) $(VERSION_DEFS) -o $@ $(SRCS) \
 		-I. \
 		-I$(MMT_DPI)/include \
 		-I./utils \
@@ -107,40 +113,40 @@ test: build
 	./$(TARGET) analyze -t smallFlows.pcap -a --json --sessions 2>/dev/null | jq '.protocols[0].sessions' > /dev/null && echo "JSON sessions valid OK"
 	@echo ""
 	@echo "=== Test 5: Config unit tests ==="
-	$(CC) $(TEST_CFLAGS) -o test_config tests/test_config.c config.c -I. && ./test_config && rm -f test_config
+	$(CC) $(TEST_CFLAGS) $(WARNFLAGS) -o test_config tests/test_config.c config.c -I. && ./test_config && rm -f test_config
 	@echo ""
 	@echo "=== Test 5b: Anomaly detection unit tests ==="
-	$(CC) $(TEST_CFLAGS) $(VERSION_DEFS) -o test_anomaly tests/test_anomaly.c core/engine.c cli/output.c \
+	$(CC) $(TEST_CFLAGS) $(WARNFLAGS) $(VERSION_DEFS) -o test_anomaly tests/test_anomaly.c core/engine.c cli/output.c \
 		utils/colors.c utils/version.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_anomaly && rm -f test_anomaly
 	@echo ""
 	@echo "=== Test 6: Parse unit tests ==="
-	$(CC) $(TEST_CFLAGS) -o test_parse tests/test_parse.c cli/parse.c config.c -I. -I./utils && ./test_parse && rm -f test_parse
+	$(CC) $(TEST_CFLAGS) $(WARNFLAGS) -o test_parse tests/test_parse.c cli/parse.c config.c -I. -I./utils && ./test_parse && rm -f test_parse
 	@echo ""
 	@echo "=== Test 7: WiFi conversion unit tests ==="
-	$(CC) $(TEST_CFLAGS) -o test_wifi tests/test_wifi.c capture.c \
+	$(CC) $(TEST_CFLAGS) $(WARNFLAGS) -o test_wifi tests/test_wifi.c capture.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_wifi && rm -f test_wifi
 	@echo ""
 	@echo "=== Test 8: Flow reporting unit tests ==="
-	$(CC) $(TEST_CFLAGS) -o test_flows tests/test_flows.c flows.c \
+	$(CC) $(TEST_CFLAGS) $(WARNFLAGS) -o test_flows tests/test_flows.c flows.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_flows && rm -f test_flows
 	@echo ""
 	@echo "=== Test 9: Capture dispatch unit tests ==="
-	$(CC) $(TEST_CFLAGS) -o test_capture_dispatch tests/test_capture_dispatch.c capture.c \
+	$(CC) $(TEST_CFLAGS) $(WARNFLAGS) -o test_capture_dispatch tests/test_capture_dispatch.c capture.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_capture_dispatch && rm -f test_capture_dispatch
 	@echo ""
 	@echo "=== Test 10: Engine output unit tests ==="
-	$(CC) $(TEST_CFLAGS) $(VERSION_DEFS) -o test_engine_output tests/test_engine_output.c core/engine.c cli/output.c \
+	$(CC) $(TEST_CFLAGS) $(WARNFLAGS) $(VERSION_DEFS) -o test_engine_output tests/test_engine_output.c core/engine.c cli/output.c \
 		utils/colors.c utils/version.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_engine_output && rm -f test_engine_output
 	@echo ""
 	@echo "=== Test 11: Engine statistics unit tests ==="
-	$(CC) $(TEST_CFLAGS) $(VERSION_DEFS) -o test_engine_stats tests/test_engine_stats.c core/engine.c cli/output.c \
+	$(CC) $(TEST_CFLAGS) $(WARNFLAGS) $(VERSION_DEFS) -o test_engine_stats tests/test_engine_stats.c core/engine.c cli/output.c \
 		utils/colors.c utils/version.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_engine_stats && rm -f test_engine_stats
