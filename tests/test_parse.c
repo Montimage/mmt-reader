@@ -170,6 +170,69 @@ static void test_parse_proto_path(void) {
     ASSERT_EQ(1, opts.proto_path, "-a sets proto_path=1");
 }
 
+/* ---- Consolidated option-argument helpers (issue #67) ---- */
+
+/*
+ * -b/--buffer and -F/--flows now share one bounded-integer parser, and
+ * -x/-y/-z share one 0-or-1 parser. The success paths below pin the
+ * per-flag destinations so a mis-wired shared helper cannot pass
+ * unnoticed. Rejection paths stay in tests/test_cli.sh: they exit
+ * through the noreturn parse_error(), which would kill this binary.
+ */
+
+static void test_parse_buffer_size_bounds(void) {
+    char *argv_min[] = { "mmtReader", "analyze", "-t", "test.pcap", "-b", "1" };
+    char *argv_max[] = { "mmtReader", "analyze", "-t", "test.pcap", "-b", "10000" };
+    cli_options_t opts;
+
+    parse_init(&opts);
+    int rc = parse_options(6, argv_min, &opts);
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "-b 1 returns OK");
+    ASSERT_EQ(1, opts.buffer_mb, "-b 1 sets buffer_mb=1 (lower bound)");
+
+    parse_init(&opts);
+    rc = parse_options(6, argv_max, &opts);
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "-b 10000 returns OK");
+    ASSERT_EQ(10000, opts.buffer_mb, "-b 10000 sets buffer_mb=10000 (upper bound)");
+}
+
+static void test_parse_flows_seconds(void) {
+    /* -F is capture-only: analyze rejects it during final validation */
+    char *argv[] = { "mmtReader", "capture", "-i", "eth0", "-F", "5" };
+    cli_options_t opts;
+
+    parse_init(&opts);
+    int rc = parse_options(6, argv, &opts);
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "capture -F 5 returns OK");
+    ASSERT_EQ(5, opts.flows_seconds, "-F 5 sets flows_seconds=5");
+}
+
+static void test_parse_classify_flags_zero(void) {
+    char *argv[] = { "mmtReader", "analyze", "-t", "test.pcap",
+                     "-x", "0", "-y", "0", "-z", "0" };
+    cli_options_t opts;
+
+    parse_init(&opts);
+    int rc = parse_options(10, argv, &opts);
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "-x/-y/-z 0 returns OK");
+    ASSERT_EQ(0, opts.ip_classify, "-x 0 sets ip_classify=0");
+    ASSERT_EQ(0, opts.hostname_classify, "-y 0 sets hostname_classify=0");
+    ASSERT_EQ(0, opts.port_classify, "-z 0 sets port_classify=0");
+}
+
+static void test_parse_classify_flags_one(void) {
+    char *argv[] = { "mmtReader", "analyze", "-t", "test.pcap",
+                     "-x", "1", "-y", "1", "-z", "1" };
+    cli_options_t opts;
+
+    parse_init(&opts);
+    int rc = parse_options(10, argv, &opts);
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "-x/-y/-z 1 returns OK");
+    ASSERT_EQ(1, opts.ip_classify, "-x 1 sets ip_classify=1");
+    ASSERT_EQ(1, opts.hostname_classify, "-y 1 sets hostname_classify=1");
+    ASSERT_EQ(1, opts.port_classify, "-z 1 sets port_classify=1");
+}
+
 /* ---- Config precedence vs environment variables (issue #55) ---- */
 
 /** Create a throwaway HOME directory containing a .mmtreader.conf */
@@ -339,6 +402,10 @@ int main(void) {
     test_parse_no_color_flag();
     test_parse_buffer_size();
     test_parse_proto_path();
+    test_parse_buffer_size_bounds();
+    test_parse_flows_seconds();
+    test_parse_classify_flags_zero();
+    test_parse_classify_flags_one();
     test_config_survives_unset_env();
     test_set_env_overrides_config();
     test_env_zero_overrides_config_conflict();
