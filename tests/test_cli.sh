@@ -188,6 +188,11 @@ assert_output_contains "top-level --help shows general help" "MMT-READER" "$out"
 # --version
 out=$( "$BINARY" --version 2>&1 )
 assert_output_contains "--version shows version" "version" "$out"
+# issue #70 (F-BUG-005): product and SDK versions are separate, labeled fields
+assert_output_contains "--version labels the mmtReader product version" \
+    "mmtReader version:" "$out"
+assert_output_contains "--version labels the MMT-DPI SDK version" \
+    "MMT-DPI SDK version:" "$out"
 
 # -h at top level
 out=$( "$BINARY" -h 2>&1 )

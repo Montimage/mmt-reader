@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Report mmtReader's own product version distinctly from the MMT-DPI SDK version
+  (#70, `F-BUG-005`). `--version` and the startup banner now print two labeled
+  lines, and the product version is injected at build time via
+  `make MMTREADER_VERSION=...` (`-DMMTREADER_VERSION`).
+
+### Changed
+
+- **Breaking (JSON):** the `--json` `"version"` field changed from a bare string
+  holding the SDK version to an object:
+  `{"mmtreader": "0.3.0", "mmt_dpi": "1.8.0 (42cac8b7)"}`. Consumers reading
+  `.version` as a string must read `.version.mmt_dpi` instead.
+
 ## [v0.3.0] - 2026-01-01
 
 ### Added

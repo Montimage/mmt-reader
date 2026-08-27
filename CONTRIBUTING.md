@@ -28,8 +28,8 @@ Before filing a bug report:
 
 1. **Search existing issues** — Check if the bug has already been reported.
 2. **Gather information** — Collect the following:
-   - MMT-Reader version (shown in the banner on startup)
-   - MMT-DPI version (`mmt_version()` output)
+   - MMT-Reader version (`mmtReader --version` → `mmtReader version:`)
+   - MMT-DPI SDK version (`mmtReader --version` → `MMT-DPI SDK version:`)
    - Operating system and architecture
    - The exact command used
    - A sample pcap file that reproduces the issue (if possible)

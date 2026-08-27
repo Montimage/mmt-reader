@@ -103,19 +103,19 @@ test groups** (plus sub-group 2b) defined inline in `Makefile:49-116`:
 | Test 2 / 2b | JSON validity; `input_stats` vs `protocols[]` consistency | yes |
 | Test 3 / 4 | `--sessions` flag (text and JSON) | Test 4 only |
 | Tests 5–11 | Unit suites: config (40), parse (39), WiFi conversion (43), flows (38), capture dispatch (24), engine output (7), engine stats (3) asserts | no |
-| Test 12 | CLI integration script `tests/test_cli.sh` — 27 checks | indirectly |
+| Test 12 | CLI integration script `tests/test_cli.sh` — 35 checks | indirectly |
 | Test 13 | Shell-completion files exist | no |
 
 Expected success shape (reference run):
 
 ```
 === Test Summary ===        ← inside group 12
-Passed: 27 / 27
+Passed: 35 / 35
 ...
 All tests passed!           ← final banner, exit code 0
 ```
 
-Totals to expect: **~194 unit asserts** across tests 5–11, **27/27 CLI
+Totals to expect: **~194 unit asserts** across tests 5–11, **35/35 CLI
 integration checks**, **0 failures**, exactly **one tolerated skip**:
 
 ```

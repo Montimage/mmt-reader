@@ -5,6 +5,7 @@
  *   - version_banner(): prints the full MMT-READER banner
  *   - version_banner_fd(): prints banner to a specific file descriptor
  *   - version_print(): prints a concise --version output
+ *   - product_version(): returns mmtReader's own release version
  *   - version(): returns the MMT-SDK version string
  */
 #ifndef VERSION_H
@@ -29,6 +30,12 @@ void version_banner_fd(const char *prog_name, FILE *fp);
  * Print a concise --version output and exit with code 0.
  */
 void version_print(void);
+
+/**
+ * Return mmtReader's own product version (injected via -DMMTREADER_VERSION).
+ * @return Version string (constant, do not free)
+ */
+const char *product_version(void);
 
 /**
  * Return the MMT-SDK version string.

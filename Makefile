@@ -15,6 +15,12 @@ COV_FLAGS   ?= --coverage -DCOVERAGE_BUILD
 MMT_DPI     ?= /opt/mmt/dpi
 SDK_MIN_VERSION = 1.8.0
 
+# mmtReader's own product version — distinct from the MMT-DPI SDK version.
+# Injected into every translation unit that reports versions (issue #70,
+# F-BUG-005). Kept in sync with the README version badge.
+MMTREADER_VERSION ?= 0.3.0
+VERSION_DEFS = -DMMTREADER_VERSION='"$(MMTREADER_VERSION)"'
+
 SRCS        = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c flows.c config.c
 TARGET      = mmtReader
 
@@ -44,8 +50,8 @@ check-sdk:
 	fi; \
 	echo "MMT-DPI SDK $$sdk_version OK"
 
-$(TARGET): $(SRCS)
-	$(CC) $(CFLAGS) -o $@ $^ \
+$(TARGET): $(SRCS) Makefile
+	$(CC) $(CFLAGS) $(VERSION_DEFS) -o $@ $(SRCS) \
 		-I. \
 		-I$(MMT_DPI)/include \
 		-I./utils \
@@ -83,6 +89,9 @@ test: build
 	@echo ""
 	@echo "=== Test 2: JSON output ==="
 	./$(TARGET) analyze -t smallFlows.pcap -a --json 2>/dev/null | jq '.input_stats.packets' > /dev/null && echo "JSON valid OK"
+	@# issue #70 (F-BUG-005): "version" is an object separating product from SDK
+	./$(TARGET) analyze -t smallFlows.pcap --json 2>/dev/null | jq -e '(.version.mmtreader == "$(MMTREADER_VERSION)") and (.version.mmt_dpi | type == "string" and length > 0) and (.version.mmtreader != .version.mmt_dpi)' > /dev/null \
+		&& echo "JSON version distinguishes product and SDK OK"
 	@echo ""
 	@echo "=== Test 2b: input_stats agrees with protocols[] ==="
 	@# Run without -a on purpose: protocols[] must be populated either way.
@@ -101,7 +110,7 @@ test: build
 	$(CC) $(TEST_CFLAGS) -o test_config tests/test_config.c config.c -I. && ./test_config && rm -f test_config
 	@echo ""
 	@echo "=== Test 5b: Anomaly detection unit tests ==="
-	$(CC) $(TEST_CFLAGS) -o test_anomaly tests/test_anomaly.c core/engine.c cli/output.c \
+	$(CC) $(TEST_CFLAGS) $(VERSION_DEFS) -o test_anomaly tests/test_anomaly.c core/engine.c cli/output.c \
 		utils/colors.c utils/version.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_anomaly && rm -f test_anomaly
@@ -125,13 +134,13 @@ test: build
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_capture_dispatch && rm -f test_capture_dispatch
 	@echo ""
 	@echo "=== Test 10: Engine output unit tests ==="
-	$(CC) $(TEST_CFLAGS) -o test_engine_output tests/test_engine_output.c core/engine.c cli/output.c \
+	$(CC) $(TEST_CFLAGS) $(VERSION_DEFS) -o test_engine_output tests/test_engine_output.c core/engine.c cli/output.c \
 		utils/colors.c utils/version.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_engine_output && rm -f test_engine_output
 	@echo ""
 	@echo "=== Test 11: Engine statistics unit tests ==="
-	$(CC) $(TEST_CFLAGS) -o test_engine_stats tests/test_engine_stats.c core/engine.c cli/output.c \
+	$(CC) $(TEST_CFLAGS) $(VERSION_DEFS) -o test_engine_stats tests/test_engine_stats.c core/engine.c cli/output.c \
 		utils/colors.c utils/version.c \
 		-I. -I/opt/mmt/dpi/include -I./utils -I./cli \
 		-L/opt/mmt/dpi/lib -lmmt_core -ldl -lpcap && ./test_engine_stats && rm -f test_engine_stats
