@@ -16,6 +16,19 @@
   `{"mmtreader": "0.3.0", "mmt_dpi": "1.8.0 (42cac8b7)"}`. Consumers reading
   `.version` as a string must read `.version.mmt_dpi` instead.
 
+### Documentation
+
+- Align README, `docs/DEVELOPMENT.md`, `docs/TESTING.md`, `AGENT_ENVIRONMENT.md`
+  and the mmt-reader skill with the real build (#72, `F-DOCS-001`,
+  `F-DOCS-002`): the manual compile command now names `flows.c` and links,
+  `libconfuse` is gone as a prerequisite (`config.c` has its own INI parser),
+  the `-Wall -Wextra` warning gate and `-DMMTREADER_VERSION` injection are
+  documented, and every test total is re-measured from an actual run
+  (14 numbered groups, 252 unit asserts, 35/35 CLI checks, 6/6 SDK checks).
+- Replace the invented README sample output and JSON sample with output
+  captured from `./mmtReader analyze -t smallFlows.pcap -a`, and drop a
+  duplicated Usage Examples block.
+
 ## [v0.3.0] - 2026-01-01
 
 ### Added

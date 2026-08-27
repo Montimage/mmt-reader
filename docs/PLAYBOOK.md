@@ -817,7 +817,7 @@ All experiments ran on this machine against `smallFlows.pcap` (Aug 12, 2026):
 |------------|---------|------------|
 | 1 — Forensic Triage | `./mmtReader analyze -t smallFlows.pcap -a` | 28 protocols, 679 sessions, 14,261 packets |
 | 2 — Top Talkers | `./mmtReader analyze -t smallFlows.pcap -a -x 0 -y 0` | HTTP at 58% (port-only), 17 protocols, many apps undetected |
-| 3 — JSON Pipeline | `./mmtReader analyze -t smallFlows.pcap --json -q -a` | 38 protocol paths, 28 protocols, jq-parseable |
+| 3 — JSON Pipeline | `./mmtReader analyze -t smallFlows.pcap --json -q -a` | 37 protocol paths, 28 protocols, jq-parseable |
 | 4 — Live Monitor | `sudo ./mmtReader capture -i eth0 -a -b 100` | Requires live interface — representative output shown |
 | 5 — Session Audit | `./mmtReader analyze -t smallFlows.pcap -s -q` | 679 sessions (all IPv4, 168 still active), 47.77 pps, 2.27 fps |
 | 6 — AI Agent | `./mmtReader analyze -t smallFlows.pcap --json -q -a` | AI parses JSON → natural language answer |
