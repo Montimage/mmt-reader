@@ -40,7 +40,7 @@ Before filing a bug report:
 ```
 **Version:** MMT-Reader 0.3.0, MMT-DPI <version>
 **OS:** Linux x86_64
-**Command:** ./mmtReader -t capture.pcap -a
+**Command:** ./mmtReader analyze -t capture.pcap -a
 
 **Expected behavior:**
 ...
@@ -83,7 +83,7 @@ Feature requests are welcome. Please include:
 
 ### Pull Request Checklist
 
-- [ ] Changes compile without warnings (`gcc -Wall -Wextra`)
+- [ ] Changes compile without warnings (`make` builds with `-Wall -Wextra`)
 - [ ] Changes produce correct output with test pcap
 - [ ] New features are documented in `docs/USER_GUIDE.md`
 - [ ] Changelog entry added in `docs/CHANGELOG.md`
@@ -93,7 +93,7 @@ Feature requests are welcome. Please include:
 
 ## Code Style
 
-MMT-Reader is a single-file C application. Please follow these conventions:
+MMT-Reader is a modular C application (see `docs/ARCHITECTURE.md`). Please follow these conventions:
 
 ### Naming
 
@@ -128,27 +128,25 @@ MMT-Reader is a single-file C application. Please follow these conventions:
 Before submitting a PR, verify your changes:
 
 ```bash
-# 1. Compile with warnings enabled
-gcc -Wall -Wextra -g -o mmtReader mmtReader.c \
-    -I /opt/mmt/dpi/include \
-    -L /opt/mmt/dpi/lib \
-    -lmmt_core -ldl -lpcap
+# 1. Build — warnings are enabled by default (WARNFLAGS = -Wall -Wextra)
+#    and the build must stay warning-free
+make clean && make
 
-# 2. Verify the binary
-file mmtReader
+# 2. Run the full test suite
+make test
 
 # 3. Test with offline mode
-./mmtReader -t smallFlows.pcap -a
+./mmtReader analyze -t smallFlows.pcap -a
 
 # 4. Test with online mode (requires root and an interface)
-sudo ./mmtReader -i eth0 -a
+sudo ./mmtReader capture -i eth0 -a
 # Press Ctrl+C to stop
 
 # 5. Verify help output
 ./mmtReader -h
 
 # 6. Check for memory leaks (if valgrind is available)
-valgrind --leak-check=full ./mmtReader -t smallFlows.pcap -a
+valgrind --leak-check=full ./mmtReader analyze -t smallFlows.pcap -a
 ```
 
 ---
