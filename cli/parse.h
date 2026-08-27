@@ -70,6 +70,7 @@ typedef struct {
     int         verbose;        /**< 1 if --verbose / -v                */
 
     int         flows_seconds;  /**< capture duration + top-flow report (-F) */
+    int         duration_seconds; /**< timed capture + pcap auto-save (-d)   */
 
     const char *config_path;    /**< 1 if --config flag was passed      */
 

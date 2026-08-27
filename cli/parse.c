@@ -102,6 +102,7 @@ static const char *capture_help =
 "  -a, --proto-path         Show per-protocol-path statistics\n"
 "  -s, --sessions           Show per-protocol session counts\n"
 "  -F, --flows <seconds>    Capture for <seconds>, then report top flows by volume\n"
+"  -d, --duration <seconds> Capture for <seconds>, auto-save to /tmp/mmtreader-<pid>.pcap\n"
 "  -j, --json               Output statistics in JSON format\n"
 "  -T, --text               Explicitly set text output format (default)\n"
 
@@ -481,6 +482,7 @@ static const struct option long_options[] = {
     { "proto-path",      no_argument,       NULL, 'a' },
     { "sessions",        no_argument,       NULL, 's' },
     { "flows",           required_argument, NULL, 'F' },
+    { "duration",        required_argument, NULL, 'd' },
     { "json",            no_argument,       NULL, 'j' },
     { "text",            no_argument,       NULL, 'T' },
     { "quiet",           no_argument,       NULL, 'q' },
@@ -619,7 +621,7 @@ static int parse_option_loop(int argc, char *argv[], cli_options_t *opts, int su
     /* Reset getopt state after argv shift */
     optind = 1;
 
-    while ((opt = getopt_long(argc, argv, "t:i:b:haVsqjTCx:y:z:c:vF:",
+    while ((opt = getopt_long(argc, argv, "t:i:b:haVsqjTCx:y:z:c:vF:d",
                               long_options, NULL)) != EOF) {
         switch (opt) {
         case 't':
@@ -636,6 +638,11 @@ static int parse_option_loop(int argc, char *argv[], cli_options_t *opts, int su
         case 'F':
             opts->flows_seconds = parse_bounded_int_arg(optarg, LONG_MAX,
                 "--flows must be a positive number of seconds", prog_name);
+            break;
+
+        case 'd':
+            opts->duration_seconds = parse_bounded_int_arg(optarg, LONG_MAX,
+                "--duration must be a positive number of seconds", prog_name);
             break;
 
         case 'x':
@@ -704,6 +711,7 @@ void parse_init(cli_options_t *opts) {
     opts->quiet           = 0;
     opts->verbose         = 0;
     opts->flows_seconds   = 0;
+    opts->duration_seconds = 0;
     opts->config_path     = NULL;
 
     /* Environment variables (lowest priority — CLI flags override these).
