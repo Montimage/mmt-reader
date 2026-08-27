@@ -587,7 +587,7 @@ MMT-Reader prints four sections at the end of execution:
 
 ```
 mmtReader/
-├── mmtReader.c        # Thin CLI entry point (~150 lines)
+├── mmtReader.c        # Thin CLI entry point (~280 lines)
 ├── mmtReader.1        # Man page
 ├── Makefile           # Build, install, uninstall targets
 ├── install.sh         # Self-contained global installer

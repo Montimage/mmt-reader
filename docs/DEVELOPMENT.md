@@ -354,7 +354,7 @@ sudo ./mmtReader capture lo -a
 
 ```
 mmtReader/
-├── mmtReader.c        # Thin CLI entry point (~150 lines)
+├── mmtReader.c        # Thin CLI entry point (~280 lines)
 ├── Makefile           # Build, install, test targets
 ├── install.sh         # Self-contained global installer
 ├── LICENSE            # Apache 2.0
