@@ -90,7 +90,7 @@ file mmtReader
 ./mmtReader analyze --help
 ```
 
-Expected output: A banner showing MMT-SDK version, build date/time, and a stats table after processing.
+Expected output: A banner showing the mmtReader product version, the MMT-DPI SDK version, build date/time, and a stats table after processing.
 
 ---
 

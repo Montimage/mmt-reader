@@ -189,7 +189,7 @@ The output layer formats and prints the final report.
 
 ### Output Sequence
 
-1. **Banner** — MMT-SDK version, build date, Montimage branding (`utils/version.c`)
+1. **Banner** — mmtReader product version, MMT-DPI SDK version, build date, Montimage branding (`utils/version.c`)
 2. **Protocol stats (with path)** — If `-a` is set, prints per-path breakdown (`cli/output.c`)
 3. **Protocol stats (aggregated)** — Sorted by packet count, prints per-protocol totals (`cli/output.c`)
 4. **Input statistics** — Summary: packets, data, sessions, protocols, duration, bandwidth, pps, fps (`cli/output.c`)

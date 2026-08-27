@@ -73,7 +73,7 @@ sequenceDiagram
 **Raw mmtReader output (what the Agent receives):**
 
 ```
-MMT-SDK 1.8.0 (42cac8b7) - Montimage
+mmtReader 0.3.0 (MMT-DPI SDK 1.8.0 (42cac8b7)) - Montimage
 Build: Aug 12 2026 18:32:44
 
 Protocol Statistics (with path):
@@ -183,7 +183,10 @@ Protocol Statistics (with path):
 
 ```json
 {
-  "version": "1.8.0 (42cac8b7)",
+  "version": {
+    "mmtreader": "0.3.0",
+    "mmt_dpi": "1.8.0 (42cac8b7)"
+  },
   "input_stats": {
     "packets": 14261,
     "data_volume": 9216531,
@@ -251,7 +254,10 @@ sudo ./mmtReader capture -i wlP9s9 -a -s
 
 ```json
 {
-  "version": "1.8.0 (42cac8b7)",
+  "version": {
+    "mmtreader": "0.3.0",
+    "mmt_dpi": "1.8.0 (42cac8b7)"
+  },
   "input_stats": {
     "packets": 14261,
     "data_volume": 9216531,

@@ -38,7 +38,8 @@ Enable classification by Hostname
 Enable classification by Port number
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 |            MONTIMAGE
-|       MMT-SDK version: 1.8.0 (42cac8b7)
+|       mmtReader version: 0.3.0
+|       MMT-DPI SDK version: 1.8.0 (42cac8b7)
 |       ./mmtReader: built Aug 12 2026 18:32:44
 |       http://montimage.com
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -169,7 +170,8 @@ Protocol statistics:
 Enable classification by Port number
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 |            MONTIMAGE
-|       MMT-SDK version: 1.8.0 (42cac8b7)
+|       mmtReader version: 0.3.0
+|       MMT-DPI SDK version: 1.8.0 (42cac8b7)
 |       ./mmtReader: built Aug 12 2026 18:32:44
 |       http://montimage.com
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -278,7 +280,10 @@ Protocol statistics:
 
 ```json
 {
-  "version": "1.8.0 (42cac8b7)",
+  "version": {
+    "mmtreader": "0.3.0",
+    "mmt_dpi": "1.8.0 (42cac8b7)"
+  },
   "input_stats": {
     "packets": 14261,
     "data_volume": 9216531,
@@ -368,7 +373,7 @@ The JSON output has **three top-level sections**:
 
 | Section | Purpose | Example fields |
 |---------|---------|----------------|
-| `version` | MMT-SDK version for reproducibility | `"1.8.0 (42cac8b7)"` |
+| `version` | Product and SDK versions for reproducibility | `{"mmtreader": "0.3.0", "mmt_dpi": "1.8.0 (42cac8b7)"}` |
 | `input_stats` | Capture-level metrics | `packets`, `duration_seconds`, `packets_per_sec`, `total_sessions` |
 | `protocol_paths` | Per-path breakdown (requires `-a`) | `path`, `packets`, `data_volume`, `payload_volume` |
 | `protocols` | Aggregated per-protocol totals | `name`, `packets`, `data_volume`, `payload_volume` |
@@ -428,7 +433,8 @@ Enable classification by Hostname
 Enable classification by Port number
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 |            MONTIMAGE
-|       MMT-SDK version: 1.8.0 (42cac8b7)
+|       mmtReader version: 0.3.0
+|       MMT-DPI SDK version: 1.8.0 (42cac8b7)
 |       ./mmtReader: built Aug 12 2026 18:32:44
 |       http://montimage.com
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -505,7 +511,8 @@ Enable classification by Hostname
 Enable classification by Port number
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 |            MONTIMAGE
-|       MMT-SDK version: 1.8.0 (42cac8b7)
+|       mmtReader version: 0.3.0
+|       MMT-DPI SDK version: 1.8.0 (42cac8b7)
 |       ./mmtReader: built Aug 12 2026 18:32:44
 |       http://montimage.com
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

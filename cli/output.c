@@ -364,7 +364,12 @@ static void output_json_stats(FILE *fp,
 
     /* Open JSON object */
     fprintf(fp, "{\n");
-    fprintf(fp, "  \"version\": \"%s\",\n", version());
+    /* "version" is an object so the product release and the MMT-DPI SDK
+     * build are labeled distinctly (issue #70, F-BUG-005). */
+    fprintf(fp, "  \"version\": {\n");
+    fprintf(fp, "    \"mmtreader\": \"%s\",\n", product_version());
+    fprintf(fp, "    \"mmt_dpi\": \"%s\"\n", version());
+    fprintf(fp, "  },\n");
     fprintf(fp, "  \"input_stats\": {\n");
     fprintf(fp, "    \"packets\": %" PRIu64 ",\n", stats->nb_packets);
     fprintf(fp, "    \"data_volume\": %" PRIu64 ",\n", stats->data_volume);
