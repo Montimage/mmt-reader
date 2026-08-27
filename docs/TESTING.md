@@ -23,7 +23,7 @@ through it (group 3 greps the text output instead).
 
 | Signal | Value |
 |--------|-------|
-| Unit asserts (groups 5–11, incl. 5b) | **297** |
+| Unit asserts (groups 5–11, incl. 5b) | **299** |
 | CLI integration checks (group 12) | **52 / 52** |
 | SDK version-gate checks (group 14) | **6 / 6** |
 | Failures | **0** |
@@ -60,7 +60,7 @@ build is untouched; artifacts are cleaned up when the target finishes.
 | Test 4 | — | Integration | — | JSON sessions: `--json --sessions` includes per-protocol session counts |
 | Test 5 | `tests/test_config.c` | Unit | 40 | Config file parsing (init, load, sections, comments, booleans) |
 | Test 5b | `tests/test_anomaly.c` | Unit | 9 | Anomaly detection |
-| Test 6 | `tests/test_parse.c` | Unit | 118 | CLI argument parsing (defaults, subcommands, flags, validation, config/env precedence) |
+| Test 6 | `tests/test_parse.c` | Unit | 120 | CLI argument parsing (defaults, subcommands, flags, validation, config/env precedence) |
 | Test 7 | `tests/test_wifi.c` | Unit | 43 | 802.11 → Ethernet frame conversion |
 | Test 8 | `tests/test_flows.c` | Unit | 38 | Top-flow (session) reporting |
 | Test 9 | `tests/test_capture_dispatch.c` | Unit | 37 | Capture dispatch and packet-data extraction |
@@ -118,7 +118,8 @@ gcc -g -Wall -Wextra -o test_parse tests/test_parse.c cli/parse.c config.c -I. -
 - `--no-color` — sets no_color=1
 - `-b 100` — sets buffer_mb=100
 - `-a` (proto-path) — sets proto_path=1
-- `--config` / `-c` — all four spellings, last occurrence wins, and every field
+- `--config` / `-c` — all four spellings (`-c <path>`, `-c<path>`,
+  `--config <path>`, `--config=<path>`), last occurrence wins, and every field
   a config file writes loses to its CLI flag and to the environment (issue #96)
 
 ## Integration Tests

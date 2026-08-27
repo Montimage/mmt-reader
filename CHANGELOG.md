@@ -39,7 +39,7 @@
   `libconfuse` is gone as a prerequisite (`config.c` has its own INI parser),
   the `-Wall -Wextra` warning gate and `-DMMTREADER_VERSION` injection are
   documented, and every test total is re-measured from an actual run
-  (14 numbered groups, 252 unit asserts, 35/35 CLI checks, 6/6 SDK checks).
+  (14 numbered groups, 299 unit asserts, 52/52 CLI checks, 6/6 SDK checks).
 - Replace the invented README sample output and JSON sample with output
   captured from `./mmtReader analyze -t smallFlows.pcap -a`, and drop a
   duplicated Usage Examples block.

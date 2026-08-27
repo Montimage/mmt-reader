@@ -301,12 +301,12 @@ sub-groups 2b and 5b) defined inline in `Makefile:86-165`:
 | 2 / 2b | JSON validity; `version` object separates product from SDK; `input_stats` agrees with `protocols[]` |
 | 3 / 4 | `--sessions` flag (text and JSON) |
 | 5 / 5b | Unit suites: config (40 asserts), anomaly detection (9) |
-| 6–11 | Unit suites: parse (118), WiFi conversion (43), flows (38), capture dispatch (37), engine output (7), engine stats (5) |
+| 6–11 | Unit suites: parse (120), WiFi conversion (43), flows (38), capture dispatch (37), engine output (7), engine stats (5) |
 | 12 | CLI integration script `tests/test_cli.sh` — 52 checks |
 | 13 | Shell-completion files exist (bash, zsh, fish) |
 | 14 | SDK version-check unit tests — `tests/test_sdk_check.sh`, 6 checks |
 
-Totals on a clean run: **297 unit asserts** (groups 5–11), **52/52** CLI
+Totals on a clean run: **299 unit asserts** (groups 5–11), **52/52** CLI
 integration checks, **6/6** SDK-check assertions, **0 failures**, and the
 final banner:
 

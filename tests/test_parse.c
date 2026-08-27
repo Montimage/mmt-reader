@@ -312,6 +312,16 @@ static int make_bare_home(char *dir_buf, size_t buf_size) {
 static int make_test_conf(char *path_buf, size_t buf_size, const char *conf) {
     char dir[64];
 
+    /*
+     * Define path_buf before anything can fail: ASSERT_TRUE reports and
+     * continues instead of aborting, so a caller whose make_test_conf()
+     * failed still hands its buffer to parse_options() as the -c value.
+     * An empty string is a harmless (and non-existent) config path.
+     */
+    if (buf_size > 0) {
+        path_buf[0] = '\0';
+    }
+
     snprintf(dir, sizeof(dir), "/tmp/mmt_parse_conf_XXXXXX");
     if (mkdtemp(dir) == NULL) {
         return 0;
@@ -592,7 +602,9 @@ static void test_custom_config_json_overridden_by_text_flag(void) {
 
 /*
  * The pre-scan that finds --config before getopt runs must accept every
- * spelling getopt does, not just the separated "-c path" form.
+ * spelling getopt does, not just the separated "-c path" form covered by
+ * test_custom_config_json_sets_output_format(): "-c<path>", "--config=<path>"
+ * and "--config <path>" are checked here, completing the four spellings.
  */
 static void test_custom_config_spellings(void) {
     char home[64];
@@ -622,6 +634,14 @@ static void test_custom_config_spellings(void) {
     ASSERT_EQ(PARSE_EXIT_OK, rc, "analyze --config=<conf> parses");
     ASSERT_EQ(OUTPUT_FORMAT_JSON, opts.output_format,
               "--config=<conf> applies the config");
+
+    char *argv_long_sep[] = { "mmtReader", "analyze", "-t", "test.pcap",
+                              "--config", conf };
+    parse_init(&opts);
+    rc = parse_options(6, argv_long_sep, &opts);
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "analyze --config <conf> parses");
+    ASSERT_EQ(OUTPUT_FORMAT_JSON, opts.output_format,
+              "--config <conf> (separated long form) applies the config");
 
     restore_home(saved_home);
     free(saved_home);

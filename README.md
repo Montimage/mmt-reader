@@ -401,7 +401,7 @@ cc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.3.0"' -o mmtReader mmtReader.c c
 make clean && make test
 ```
 
-Runs 14 numbered test groups (plus sub-groups 2b and 5b): 297 unit asserts,
+Runs 14 numbered test groups (plus sub-groups 2b and 5b): 299 unit asserts,
 52/52 CLI integration checks, and 6/6 SDK-check assertions, ending with
 `All tests passed!`. One skip is expected under an unprivileged run — live
 capture on `lo` needs root or `cap_net_raw`. Requires `jq`. See
