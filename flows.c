@@ -14,6 +14,7 @@
  */
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 #include <arpa/inet.h>
 #include "flows.h"
 #include "tcpip/mmt_tcpip.h"
@@ -320,7 +321,7 @@ void flows_print_top(flows_t *f, FILE *fp, int top_n) {
         endpoint_to_str(e, 0, client, sizeof(client));
         endpoint_to_str(e, 1, server, sizeof(server));
 
-        fprintf(fp, "%-12s %-24s %-24s %12lu %10lu\n",
+        fprintf(fp, "%-12s %-24s %-24s %12" PRIu64 " %10" PRIu64 "\n",
                 (e->app != NULL) ? e->app : "unknown",
                 client, server, e->bytes, e->pkts);
     }

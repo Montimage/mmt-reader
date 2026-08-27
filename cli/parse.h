@@ -25,6 +25,23 @@
 #define PARSE_EXIT_ERROR    2   /**< usage / parsing error            */
 
 /* ------------------------------------------------------------------ */
+/* Dispatch modes                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What the parsed command line asks mmtReader to do.
+ *
+ * Set by parse_options() and dispatched on by main(); MODE_NONE means no
+ * runnable mode was selected (e.g. --help only).
+ */
+typedef enum {
+    MODE_NONE           = 0,  /**< nothing to run (help / parse-only)   */
+    MODE_TRACE_FILE     = 1,  /**< analyze a pcap file (-t)             */
+    MODE_LIVE_INTERFACE = 2,  /**< live capture on an interface (-i)    */
+    MODE_VERSION        = 3   /**< print version banner and exit        */
+} cli_mode_t;
+
+/* ------------------------------------------------------------------ */
 /* Parsed options                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -36,7 +53,7 @@
  */
 typedef struct {
     const char *input;          /**< trace file (-t) or interface (-i)    */
-    int         mode;           /**< TRACE_FILE or LIVE_INTERFACE         */
+    cli_mode_t  mode;           /**< dispatch mode (see cli_mode_t)       */
     int         buffer_mb;      /**< pcap buffer size in MB (default 50)  */
     int         proto_path;     /**< per-protocol-path detail (-a)        */
     int         ip_classify;    /**< IP address classification (-x)       */

@@ -280,7 +280,7 @@ static int parse_dispatch_subcommand(int *argc, char ***argv, cli_options_t *opt
             return PARSE_EXIT_OK;
         }
         if (strcmp((*argv)[1], "--version") == 0 || strcmp((*argv)[1], "-V") == 0) {
-            opts->mode = 3; /* VERSION */
+            opts->mode = MODE_VERSION;
             return PARSE_EXIT_OK;
         }
     }
@@ -352,7 +352,7 @@ static void parse_input_arg(int opt, const char *arg, cli_options_t *opts,
             fprintf(stderr, "Error: file not found: %s\n", arg);
             parse_error(prog_name);
         }
-        opts->mode = 1; /* TRACE_FILE */
+        opts->mode = MODE_TRACE_FILE;
     } else {
         if (subcmd == SUBCMD_ANALYZE) {
             fprintf(stderr, "Error: -i/--interface is for 'capture' only\n");
@@ -362,7 +362,7 @@ static void parse_input_arg(int opt, const char *arg, cli_options_t *opts,
             fprintf(stderr, "Error: interface name too long\n");
             parse_error(prog_name);
         }
-        opts->mode = 2; /* LIVE_INTERFACE */
+        opts->mode = MODE_LIVE_INTERFACE;
     }
     opts->input = arg;
 }
@@ -394,7 +394,7 @@ static int parse_early_exit_flag(int opt, cli_options_t *opts, int subcmd,
                                  const char *prog_name) {
     if (opt == 'V') {
         /* Delegate to version module — caller handles exit */
-        opts->mode = 3; /* VERSION */
+        opts->mode = MODE_VERSION;
         return PARSE_EXIT_OK;
     }
     opts->show_help = 1;
@@ -416,7 +416,7 @@ static void parse_validate_final(const cli_options_t *opts, int subcmd,
                                  int has_input, const char *prog_name) {
     /* --flows drives a timed live capture, so it only applies to the
      * 'capture' subcommand — reject it on the offline trace-file path */
-    if (opts->mode == 1 && opts->flows_seconds > 0) {
+    if (opts->mode == MODE_TRACE_FILE && opts->flows_seconds > 0) {
         fprintf(stderr, "Error: --flows is only supported by the 'capture' subcommand (live interfaces).\n");
         parse_error(prog_name);
     }
@@ -549,7 +549,7 @@ static int parse_option_loop(int argc, char *argv[], cli_options_t *opts, int su
 
 void parse_init(cli_options_t *opts) {
     opts->input           = NULL;
-    opts->mode            = 0;
+    opts->mode            = MODE_NONE;
     opts->buffer_mb       = 50;
     opts->proto_path      = 0;
     opts->ip_classify     = 1;
@@ -601,7 +601,7 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
     /* Support positional argument: "capture eth0" without -i */
     if (subcmd == SUBCMD_CAPTURE && !has_input && optind < argc) {
         opts->input = argv[optind];
-        opts->mode  = 2; /* LIVE_INTERFACE */
+        opts->mode  = MODE_LIVE_INTERFACE;
         has_input   = 1;
     }
 
