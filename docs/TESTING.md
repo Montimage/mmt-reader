@@ -67,10 +67,10 @@ gcc -g -o test_parse test_parse.c cli/parse.c -I./cli -I./utils && ./test_parse 
 - `parse_init()` — default values (input=NULL, buffer_mb=50, ip_classify=1, etc.)
 - No subcommand — shows help
 - `--help` flag — sets show_help=1
-- `--version` flag — sets mode=3
-- `analyze -t` — sets mode=1, input=file
-- `capture -i` — sets mode=2, input=interface
-- `capture eth0` (positional) — sets mode=2, input=interface
+- `--version` flag — sets mode=MODE_VERSION
+- `analyze -t` — sets mode=MODE_TRACE_FILE, input=file
+- `capture -i` — sets mode=MODE_LIVE_INTERFACE, input=interface
+- `capture eth0` (positional) — sets mode=MODE_LIVE_INTERFACE, input=interface
 - `-q` (quiet) — sets quiet=1
 - `-v` (verbose) — sets verbose=1
 - `--json` — sets json=1

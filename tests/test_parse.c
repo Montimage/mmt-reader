@@ -20,7 +20,7 @@ static void test_parse_init_defaults(void) {
     parse_init(&opts);
 
     ASSERT_PTR_EQ(NULL, opts.input, "input should be NULL");
-    ASSERT_EQ(0, opts.mode, "mode should be 0");
+    ASSERT_EQ(MODE_NONE, opts.mode, "mode should be MODE_NONE");
     ASSERT_EQ(50, opts.buffer_mb, "buffer_mb should be 50");
     ASSERT_EQ(0, opts.proto_path, "proto_path should be 0");
     ASSERT_EQ(1, opts.ip_classify, "ip_classify should be 1");
@@ -65,7 +65,7 @@ static void test_parse_version_flag(void) {
     parse_init(&opts);
     int rc = parse_options(argc, argv, &opts);
     ASSERT_EQ(PARSE_EXIT_OK, rc, "--version returns OK");
-    ASSERT_EQ(3, opts.mode, "--version sets mode=3");
+    ASSERT_EQ(MODE_VERSION, opts.mode, "--version sets mode=MODE_VERSION");
 }
 
 static void test_parse_analyze_with_trace(void) {
@@ -76,7 +76,7 @@ static void test_parse_analyze_with_trace(void) {
     parse_init(&opts);
     int rc = parse_options(argc, argv, &opts);
     ASSERT_EQ(PARSE_EXIT_OK, rc, "analyze -t returns OK");
-    ASSERT_EQ(1, opts.mode, "analyze -t sets mode=1");
+    ASSERT_EQ(MODE_TRACE_FILE, opts.mode, "analyze -t sets mode=MODE_TRACE_FILE");
     ASSERT_STR_EQ("test.pcap", opts.input, "analyze -t sets input");
 }
 
@@ -88,7 +88,7 @@ static void test_parse_capture_with_interface(void) {
     parse_init(&opts);
     int rc = parse_options(argc, argv, &opts);
     ASSERT_EQ(PARSE_EXIT_OK, rc, "capture -i returns OK");
-    ASSERT_EQ(2, opts.mode, "capture -i sets mode=2");
+    ASSERT_EQ(MODE_LIVE_INTERFACE, opts.mode, "capture -i sets mode=MODE_LIVE_INTERFACE");
     ASSERT_STR_EQ("eth0", opts.input, "capture -i sets input");
 }
 
@@ -100,7 +100,7 @@ static void test_parse_capture_positional_interface(void) {
     parse_init(&opts);
     int rc = parse_options(argc, argv, &opts);
     ASSERT_EQ(PARSE_EXIT_OK, rc, "capture eth0 (positional) returns OK");
-    ASSERT_EQ(2, opts.mode, "capture eth0 sets mode=2");
+    ASSERT_EQ(MODE_LIVE_INTERFACE, opts.mode, "capture eth0 sets mode=MODE_LIVE_INTERFACE");
     ASSERT_STR_EQ("eth0", opts.input, "capture eth0 sets input");
 }
 

@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
         colors_set_enabled(0);
     }
     /* If --version was requested, print banner + version and exit */
-    if (opts.mode == 3) {
+    if (opts.mode == MODE_VERSION) {
         version_banner(argv[0]);
         version_print();
         return EXIT_SUCCESS;
@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
     }
 
     /* Dispatch based on mode */
-    if (opts.mode == 1) {
+    if (opts.mode == MODE_TRACE_FILE) {
         /* OFFLINE mode: read from pcap file */
         struct pcap_pkthdr p_pkthdr;
         const u_char *data;
@@ -166,7 +166,7 @@ int main(int argc, char **argv) {
         /* Print the summary explicitly — engine_destroy() no longer does */
         engine_print_stats(eng);
 
-    } else if (opts.mode == 2) {
+    } else if (opts.mode == MODE_LIVE_INTERFACE) {
         /* ONLINE mode: live capture from interface */
         pcap_t *pcap;
 

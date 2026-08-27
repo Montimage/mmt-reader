@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <sys/time.h>
 #include "mmt_core.h"
 #include "tcpip/mmt_tcpip.h"
@@ -177,7 +178,9 @@ static void proto_path_insert(proto_path_entry_t **head, proto_path_entry_t *ent
 /* ------------------------------------------------------------------ */
 
 static void protocols_stats_iterator(uint32_t proto_id, void *args) {
-    if (proto_id == 1) return; /* Ignore PROTO_META */
+    /* PROTO_META is the root of every protocol path, not a protocol
+     * on the wire - same check as core/engine.c. */
+    if (proto_id == PROTO_META) return;
 
     proto_iter_ctx_t *ctx = (proto_iter_ctx_t *)args;
 
@@ -220,7 +223,7 @@ static void protocols_stats_iterator(uint32_t proto_id, void *args) {
                         }
                     } else {
                         /* Text output */
-                        fprintf(ctx->fp, "%10lu %10lu %10lu %60s\n",
+                        fprintf(ctx->fp, "%10" PRIu64 " %10" PRIu64 " %10" PRIu64 " %60s\n",
                                 proto_stats->packets_count,
                                 proto_stats->data_volume,
                                 proto_stats->payload_volume,
@@ -285,11 +288,11 @@ static void output_text_stats(FILE *fp,
     proto_info_t *current = agg_head;
     while (current != NULL) {
         /* Protocol name in cyan */
-        fprintf(fp, "%10lu %10lu %10lu ",
+        fprintf(fp, "%10" PRIu64 " %10" PRIu64 " %10" PRIu64 " ",
                 current->pkts, current->volume, current->payload);
         colors_fprintf_fmt(fp, COLOR_CYAN, "%s", current->name);
         if (show_sessions) {
-            fprintf(fp, "    %lu", current->sessions);
+            fprintf(fp, "    %" PRIu64, current->sessions);
         }
         fprintf(fp, "\n");
         proto_info_t *next = current->next;
@@ -305,25 +308,25 @@ static void output_text_stats(FILE *fp,
 
     /* Label/value pairs — labels in bold */
     colors_fprintf(fp, COLOR_BOLD, "\tPackets: ");
-    fprintf(fp, "%lu\n", stats->nb_packets);
+    fprintf(fp, "%" PRIu64 "\n", stats->nb_packets);
 
     colors_fprintf(fp, COLOR_BOLD, "\tData: ");
-    fprintf(fp, "%lu bytes\n", stats->data_volume);
+    fprintf(fp, "%" PRIu64 " bytes\n", stats->data_volume);
 
     if (show_sessions) {
         colors_fprintf(fp, COLOR_BOLD, "\tIPv4 Sessions: ");
-        fprintf(fp, "%lu\n", stats->nb_ipv4_sessions);
+        fprintf(fp, "%" PRIu64 "\n", stats->nb_ipv4_sessions);
         colors_fprintf(fp, COLOR_BOLD, "\tIPv6 Sessions: ");
-        fprintf(fp, "%lu\n", stats->nb_ipv6_sessions);
+        fprintf(fp, "%" PRIu64 "\n", stats->nb_ipv6_sessions);
         colors_fprintf(fp, COLOR_BOLD, "\tActive Sessions: ");
-        fprintf(fp, "%lu\n", stats->nb_active_sessions);
+        fprintf(fp, "%" PRIu64 "\n", stats->nb_active_sessions);
     }
 
     colors_fprintf(fp, COLOR_BOLD, "\tTotal Sessions: ");
-    fprintf(fp, "%lu\n", stats->nb_ipv4_sessions + stats->nb_ipv6_sessions);
+    fprintf(fp, "%" PRIu64 "\n", stats->nb_ipv4_sessions + stats->nb_ipv6_sessions);
 
     colors_fprintf(fp, COLOR_BOLD, "\tProtocols: ");
-    fprintf(fp, "%lu\n", stats->nb_protocols);
+    fprintf(fp, "%" PRIu64 "\n", stats->nb_protocols);
 
     colors_fprintf(fp, COLOR_BOLD, "\tDuration: ");
     fprintf(fp, "%.0f seconds\n", duration);
@@ -363,21 +366,21 @@ static void output_json_stats(FILE *fp,
     fprintf(fp, "{\n");
     fprintf(fp, "  \"version\": \"%s\",\n", version());
     fprintf(fp, "  \"input_stats\": {\n");
-    fprintf(fp, "    \"packets\": %lu,\n", stats->nb_packets);
-    fprintf(fp, "    \"data_volume\": %lu,\n", stats->data_volume);
+    fprintf(fp, "    \"packets\": %" PRIu64 ",\n", stats->nb_packets);
+    fprintf(fp, "    \"data_volume\": %" PRIu64 ",\n", stats->data_volume);
     fprintf(fp, "    \"duration_seconds\": %.2f,\n", duration);
     fprintf(fp, "    \"bandwidth_bytes_per_sec\": %.2f,\n",
             stats->data_volume / duration);
     fprintf(fp, "    \"packets_per_sec\": %.2f,\n",
             (double)stats->nb_packets / duration);
     if (show_sessions) {
-        fprintf(fp, "    \"ipv4_sessions\": %lu,\n", stats->nb_ipv4_sessions);
-        fprintf(fp, "    \"ipv6_sessions\": %lu,\n", stats->nb_ipv6_sessions);
-        fprintf(fp, "    \"active_sessions\": %lu,\n", stats->nb_active_sessions);
+        fprintf(fp, "    \"ipv4_sessions\": %" PRIu64 ",\n", stats->nb_ipv4_sessions);
+        fprintf(fp, "    \"ipv6_sessions\": %" PRIu64 ",\n", stats->nb_ipv6_sessions);
+        fprintf(fp, "    \"active_sessions\": %" PRIu64 ",\n", stats->nb_active_sessions);
     }
-    fprintf(fp, "    \"total_sessions\": %lu,\n",
+    fprintf(fp, "    \"total_sessions\": %" PRIu64 ",\n",
             stats->nb_ipv4_sessions + stats->nb_ipv6_sessions);
-    fprintf(fp, "    \"protocols\": %lu\n", stats->nb_protocols);
+    fprintf(fp, "    \"protocols\": %" PRIu64 "\n", stats->nb_protocols);
     fprintf(fp, "  },\n");
 
     /* Protocol paths section (if enabled) */
@@ -390,9 +393,9 @@ static void output_json_stats(FILE *fp,
             char escaped[PROTO_PATH_STR_MAX * 2 + 1];
             json_escape(entry->path, escaped, sizeof(escaped));
             fprintf(fp, "    {\n");
-            fprintf(fp, "      \"packets\": %lu,\n", entry->pkts);
-            fprintf(fp, "      \"data_volume\": %lu,\n", entry->volume);
-            fprintf(fp, "      \"payload_volume\": %lu,\n", entry->payload);
+            fprintf(fp, "      \"packets\": %" PRIu64 ",\n", entry->pkts);
+            fprintf(fp, "      \"data_volume\": %" PRIu64 ",\n", entry->volume);
+            fprintf(fp, "      \"payload_volume\": %" PRIu64 ",\n", entry->payload);
             fprintf(fp, "      \"path\": \"%s\"\n", escaped);
             fprintf(fp, "    }");
             proto_path_entry_t *next = entry->next;
@@ -414,11 +417,11 @@ static void output_json_stats(FILE *fp,
         json_escape(current->name, escaped_name, sizeof(escaped_name));
         fprintf(fp, "    {\n");
         fprintf(fp, "      \"name\": \"%s\",\n", escaped_name);
-        fprintf(fp, "      \"packets\": %lu,\n", current->pkts);
-        fprintf(fp, "      \"data_volume\": %lu,\n", current->volume);
-        fprintf(fp, "      \"payload_volume\": %lu", current->payload);
+        fprintf(fp, "      \"packets\": %" PRIu64 ",\n", current->pkts);
+        fprintf(fp, "      \"data_volume\": %" PRIu64 ",\n", current->volume);
+        fprintf(fp, "      \"payload_volume\": %" PRIu64, current->payload);
         if (show_sessions) {
-            fprintf(fp, ",\n      \"sessions\": %lu", current->sessions);
+            fprintf(fp, ",\n      \"sessions\": %" PRIu64, current->sessions);
         }
         fprintf(fp, "\n    }");
         proto_info_t *next = current->next;
