@@ -43,6 +43,23 @@
 - Replace the invented README sample output and JSON sample with output
   captured from `./mmtReader analyze -t smallFlows.pcap -a`, and drop a
   duplicated Usage Examples block.
+- Regenerate every sample block in `docs/USER_GUIDE.md` from real output (#97).
+  The guide was left out of #72 and still showed a `TCP.HTTP.Google` protocol
+  path format, `Input:`/`Sessions:` labels that `cli/output.c` never prints, a
+  JSON sample predating both the `protocol_paths[]` split and the `version`
+  object from #70, and a whole "PCAP Statistics" section for a feature that
+  does not exist — `pcap_stats()` is never called. Every block is now spliced
+  from an actual `./mmtReader analyze -t smallFlows.pcap` run; every command
+  shown carries its required `analyze`/`capture` subcommand and points at the
+  bundled `smallFlows.pcap`, so it runs verbatim and exits 0. The config and
+  environment sections now agree with `docs/CONFIG.md` on which keys are live
+  and on the defaults < `~/.mmtreader.conf` < `--config` < environment < CLI
+  precedence fixed in #96.
+- Correct two identifiers in `docs/ARCHITECTURE.md` (#97): the sorted-list
+  helper is `proto_info_insert()` (`cli/output.c:104`), not
+  `insert_proto_info()`, and `engine_print_stats_ex()` lives in
+  `core/engine.c:281`, not `cli/output.c`. Its output sequence also no longer
+  lists the non-existent PCAP-statistics section.
 
 ## [v0.3.0] - 2026-01-01
 

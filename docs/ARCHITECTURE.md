@@ -70,7 +70,11 @@ pcap_loop(pcap, -1, capture_callback, NULL);
   libpcap header to MMT format and dispatches to
   `engine_process_packet_cb()` (`core/engine.c`)
 
-**Characteristics:** Real-time, requires root/admin privileges, Ethernet-only (DLT_EN10MB check).
+**Characteristics:** Real-time, requires root/admin privileges. The interface's
+datalink is read with `pcap_datalink()` (`mmtReader.c:195`); 802.11 frames
+(`DLT_IEEE802_11`, `DLT_IEEE802_11_RADIO`) are converted to Ethernet framing
+(`capture.c:289-312`) and anything else is passed straight through, so the link
+type is never rejected — MMT-DPI is initialized as `DLT_EN10MB` either way.
 
 ---
 
@@ -161,10 +165,11 @@ For each protocol (inside `cli/output.c`):
 
 ### Sorted Linked List
 
-Protocols are stored in a singly-linked list (`proto_info_t`) sorted by packet count descending:
+Protocols are stored in a doubly-linked list (`proto_info_t`) sorted by packet
+count descending, by `proto_info_insert()` (`cli/output.c:104`):
 
 ```c
-insert_proto_info(p_info);
+proto_info_insert(&head, p_info);
 // Comparison: p_info->pkts > current->pkts → insert before
 ```
 
@@ -172,7 +177,7 @@ This produces a ranked output: highest-traffic protocols first.
 
 ### Aggregate Statistics
 
-Computed in `engine_print_stats_ex()` (`cli/output.c`):
+Computed in `engine_print_stats_ex()` (`core/engine.c:281`):
 
 | Metric | Formula |
 |--------|---------|
@@ -193,7 +198,9 @@ The output layer formats and prints the final report.
 2. **Protocol stats (with path)** — If `-a` is set, prints per-path breakdown (`cli/output.c`)
 3. **Protocol stats (aggregated)** — Sorted by packet count, prints per-protocol totals (`cli/output.c`)
 4. **Input statistics** — Summary: packets, data, sessions, protocols, duration, bandwidth, pps, fps (`cli/output.c`)
-5. **PCAP statistics** — Kernel/driver drop counts (online mode only) (`core/engine.c`)
+
+There is no fifth, PCAP-level section: `pcap_stats()` is never called, so kernel
+and driver drop counts are not reported.
 
 ### JSON Output
 
