@@ -120,8 +120,8 @@ test groups** (plus sub-groups 2b and 5b) defined inline in `Makefile:86-165`:
 | Test 1 | Text output + summary printed exactly once | yes |
 | Test 2 / 2b | JSON validity; `version` object separates product from SDK; `input_stats` vs `protocols[]` consistency | yes |
 | Test 3 / 4 | `--sessions` flag (text and JSON) | Test 4 only |
-| Tests 5–11 | Unit suites: config (40), anomaly detection (9, group 5b), parse (73), WiFi conversion (43), flows (38), capture dispatch (37), engine output (7), engine stats (5) asserts | no |
-| Test 12 | CLI integration script `tests/test_cli.sh` — 35 checks | indirectly |
+| Tests 5–11 | Unit suites: config (40), anomaly detection (9, group 5b), parse (120), WiFi conversion (43), flows (38), capture dispatch (37), engine output (7), engine stats (5) asserts | no |
+| Test 12 | CLI integration script `tests/test_cli.sh` — 52 checks | indirectly |
 | Test 13 | Shell-completion files exist | no |
 | Test 14 | SDK version gate — `tests/test_sdk_check.sh`, 6 asserts | no |
 
@@ -129,13 +129,13 @@ Expected success shape (reference run):
 
 ```
 === Test Summary ===        ← inside group 12
-Passed: 35 / 35
+Passed: 52 / 52
 ...
 All tests passed!           ← final banner, exit code 0
 ```
 
-Totals to expect: **252 unit asserts** across tests 5–11 (incl. sub-group 5b),
-**35/35 CLI integration checks**, **6/6 SDK-check asserts** (test 14), **0
+Totals to expect: **299 unit asserts** across tests 5–11 (incl. sub-group 5b),
+**52/52 CLI integration checks**, **6/6 SDK-check asserts** (test 14), **0
 failures**, exactly **one tolerated skip**:
 
 ```

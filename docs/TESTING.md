@@ -23,8 +23,8 @@ through it (group 3 greps the text output instead).
 
 | Signal | Value |
 |--------|-------|
-| Unit asserts (groups 5–11, incl. 5b) | **252** |
-| CLI integration checks (group 12) | **35 / 35** |
+| Unit asserts (groups 5–11, incl. 5b) | **299** |
+| CLI integration checks (group 12) | **52 / 52** |
 | SDK version-gate checks (group 14) | **6 / 6** |
 | Failures | **0** |
 | Tolerated skips | **1** — live capture on `lo` |
@@ -60,13 +60,13 @@ build is untouched; artifacts are cleaned up when the target finishes.
 | Test 4 | — | Integration | — | JSON sessions: `--json --sessions` includes per-protocol session counts |
 | Test 5 | `tests/test_config.c` | Unit | 40 | Config file parsing (init, load, sections, comments, booleans) |
 | Test 5b | `tests/test_anomaly.c` | Unit | 9 | Anomaly detection |
-| Test 6 | `tests/test_parse.c` | Unit | 73 | CLI argument parsing (defaults, subcommands, flags, validation) |
+| Test 6 | `tests/test_parse.c` | Unit | 120 | CLI argument parsing (defaults, subcommands, flags, validation, config/env precedence) |
 | Test 7 | `tests/test_wifi.c` | Unit | 43 | 802.11 → Ethernet frame conversion |
 | Test 8 | `tests/test_flows.c` | Unit | 38 | Top-flow (session) reporting |
 | Test 9 | `tests/test_capture_dispatch.c` | Unit | 37 | Capture dispatch and packet-data extraction |
 | Test 10 | `tests/test_engine_output.c` | Unit | 7 | Engine output: one summary per run, TEXT/JSON honoured |
 | Test 11 | `tests/test_engine_stats.c` | Unit | 5 | Engine statistics aggregation and extraction-failure accounting |
-| Test 12 | `tests/test_cli.sh` | Integration | 35 | CLI end-to-end (env vars, quiet, verbose, input validation, capture contract) |
+| Test 12 | `tests/test_cli.sh` | Integration | 52 | CLI end-to-end (env vars, quiet, verbose, input validation, capture contract, config/env output format and precedence) |
 | Test 13 | — | Integration | — | Bash, zsh and fish completion files exist |
 | Test 14 | `tests/test_sdk_check.sh` | Integration | 6 | `make check-sdk` accepts ≥ 1.8.0 and rejects older/missing SDKs |
 
@@ -118,6 +118,9 @@ gcc -g -Wall -Wextra -o test_parse tests/test_parse.c cli/parse.c config.c -I. -
 - `--no-color` — sets no_color=1
 - `-b 100` — sets buffer_mb=100
 - `-a` (proto-path) — sets proto_path=1
+- `--config` / `-c` — all four spellings (`-c <path>`, `-c<path>`,
+  `--config <path>`, `--config=<path>`), last occurrence wins, and every field
+  a config file writes loses to its CLI flag and to the environment (issue #96)
 
 ## Integration Tests
 
@@ -133,7 +136,9 @@ End-to-end CLI behavior tests:
 - **Input validation** — missing `-t` for analyze, missing `-i` for capture, invalid buffer sizes
 - **Quiet mode** — `--quiet` suppresses INFO messages, still shows results
 - **Verbose mode** — `--verbose` shows DEBUG messages to stderr
-- **Environment variables** — `MMTREADER_QUIET`, `MMTREADER_NO_COLOR`, `MMTREADER_JSON`
+- **Environment variables** — `MMTREADER_QUIET`, `MMTREADER_NO_COLOR`, `MMTREADER_JSON` (the JSON checks assert the produced output, not just the exit code)
+- **Config file and precedence** — `--config` selects the output format, and CLI
+  flags, then the environment, beat both config files (issue #96)
 - **CLI overrides env vars** — `-v` overrides `MMTREADER_QUIET`
 - **General options** — `--help`, `--version`, `-h`, `--json`, short flags
 - **Capture output contract** — live capture on `lo` prints exactly one summary

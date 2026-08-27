@@ -177,15 +177,39 @@ static const char *general_help =
  */
 #define PARSE_CONTINUE (-1)
 
+/*
+ * Config-key audit (issue #96). Of the five fields copied below:
+ *
+ *   json      — was DEAD for behavior: it fed only a debug printf, while
+ *               every output decision reads output_format. That is the bug
+ *               this issue fixes; the copy now writes output_format, the
+ *               single carrier of the output format.
+ *   quiet     — live, but only on the live-capture path (mmtReader.c:173,
+ *               :244). `analyze` emits no INFO lines either way, so -q has
+ *               no observable effect there.
+ *   verbose   — live and general (mmtReader.c:91, :149, :160, :181, :269).
+ *               Config- and CLI-only: there is no MMTREADER_VERBOSE.
+ *   no_color  — live and general (mmtReader.c:67).
+ *   buffer_mb — live, but only on the live-capture path (mmtReader.c:174,
+ *               :177, :183, :186); `analyze` uses pcap_open_offline() and
+ *               ignores it.
+ *
+ * Config keys nothing reads at all: proto_path, sessions, output_format,
+ * ip_classify, hostname_classify, port_classify, and the per-section
+ * [analyze]/[capture] buffer overrides — see docs/CONFIG.md.
+ */
+
 /**
  * Copy the five config-file-backed fields onto the parsed options.
  *
  * Shared by the default (~/.mmtreader.conf) and the custom (--config)
  * load paths so the two stay in lockstep; an absent/zero buffer falls
- * back to the built-in 50 MB default.
+ * back to the built-in 50 MB default. All five are written
+ * unconditionally, so a --config file replaces — rather than merges
+ * with — whatever the default config supplied.
  */
 static void parse_copy_config_fields(cli_options_t *opts, const config_t *cfg) {
-    opts->json      = cfg->json;
+    opts->output_format = cfg->json ? OUTPUT_FORMAT_JSON : OUTPUT_FORMAT_TEXT;
     opts->quiet     = cfg->quiet;
     opts->verbose   = cfg->verbose;
     opts->no_color  = cfg->no_color;
@@ -194,45 +218,57 @@ static void parse_copy_config_fields(cli_options_t *opts, const config_t *cfg) {
 }
 
 /**
- * Load the default config file, then re-apply the environment overrides.
+ * Apply the environment overrides on top of the current option values.
  *
- * Precedence: built-in defaults < ~/.mmtreader.conf < environment.
  * Only json / no_color / quiet are environment-overridable (there is no
- * MMTREADER_VERBOSE), and unset or empty variables leave the values just
- * loaded from the config file untouched.
+ * MMTREADER_VERBOSE), and unset or empty variables leave the values
+ * untouched so config-file settings survive when no override exists.
+ *
+ * MMTREADER_JSON feeds output_format rather than a boolean of its own:
+ * it is read into a local flag and mapped explicitly onto
+ * OUTPUT_FORMAT_TEXT/JSON, so an out-of-range MMTREADER_JSON=5 can never
+ * leave a bogus format behind.
  */
-static void parse_load_default_config(cli_options_t *opts) {
-    config_t file_cfg;
-    config_init(&file_cfg);
-    if (config_load(&file_cfg, NULL) == 0 && file_cfg.loaded) {
-        parse_copy_config_fields(opts, &file_cfg);
-    }
+static void parse_apply_env(cli_options_t *opts) {
+    int json = (opts->output_format == OUTPUT_FORMAT_JSON);
 
-    /* Environment variables (medium priority — CLI flags override these).
-     * Applied only when actually set: unset variables must not overwrite
-     * the values just loaded from the config file. */
-    env_apply_int("MMTREADER_JSON", &opts->json);
+    if (env_apply_int("MMTREADER_JSON", &json)) {
+        opts->output_format = json ? OUTPUT_FORMAT_JSON : OUTPUT_FORMAT_TEXT;
+    }
     env_apply_int("MMTREADER_NO_COLOR", &opts->no_color);
     env_apply_int("MMTREADER_QUIET", &opts->quiet);
 }
 
 /**
- * Re-apply a config file named with -c/--config, after the option loop.
+ * Load both config files, then re-apply the environment overrides.
  *
- * NOTE: the five shared fields are overwritten unconditionally, so a
- * custom config silently wins over CLI flags, and no environment
- * override is re-applied on this path. That is pre-existing, intentional
- * behavior and is preserved here verbatim.
+ * Precedence: built-in defaults < ~/.mmtreader.conf < --config file <
+ * environment < CLI flags. Both files run through the same copy helper
+ * and both are loaded *before* the getopt loop, so the flags parsed
+ * afterwards always have the last word. Until issue #96 the --config
+ * file was instead re-applied *after* the loop, which silently beat
+ * explicit flags and skipped the environment entirely — the two config
+ * paths had opposite precedence.
+ *
+ * opts->config_path is filled by parse_prescan_config_path() before this
+ * runs; an unreadable path is ignored, exactly as for the default file.
  */
-static void parse_reload_custom_config(cli_options_t *opts) {
-    if (opts->config_path == NULL) {
-        return;
+static void parse_load_config_files(cli_options_t *opts) {
+    config_t cfg;
+
+    config_init(&cfg);
+    if (config_load(&cfg, NULL) == 0 && cfg.loaded) {
+        parse_copy_config_fields(opts, &cfg);
     }
-    config_t custom_cfg;
-    config_init(&custom_cfg);
-    if (config_load(&custom_cfg, opts->config_path) == 0 && custom_cfg.loaded) {
-        parse_copy_config_fields(opts, &custom_cfg);
+
+    if (opts->config_path != NULL) {
+        config_init(&cfg);
+        if (config_load(&cfg, opts->config_path) == 0 && cfg.loaded) {
+            parse_copy_config_fields(opts, &cfg);
+        }
     }
+
+    parse_apply_env(opts);
 }
 
 /**
@@ -459,6 +495,112 @@ static const struct option long_options[] = {
     { NULL, 0, NULL, 0 }
 };
 
+/* ------------------------------------------------------------------ */
+/* Config-file pre-scan                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Resolve a long-option name to its long_options entry, accepting the
+ * unambiguous abbreviations getopt_long() accepts.
+ *
+ * @param name Option name without the leading "--"
+ * @param len  Length of the name (stops at '=' for --name=value)
+ * @return The matching entry, or NULL when unknown or ambiguous
+ */
+static const struct option *long_opt_lookup(const char *name, size_t len) {
+    const struct option *match = NULL;
+
+    for (const struct option *o = long_options; o->name != NULL; o++) {
+        if (strncmp(o->name, name, len) != 0) {
+            continue;
+        }
+        if (o->name[len] == '\0') {
+            return o;            /* exact match beats any abbreviation */
+        }
+        if (match != NULL) {
+            return NULL;         /* ambiguous abbreviation */
+        }
+        match = o;
+    }
+    return match;
+}
+
+/* Short options that consume an argument — the ':' entries of the
+ * optstring used by parse_option_loop(). The scan below skips those
+ * arguments so a value merely containing 'c' is never read as -c. */
+#define SHORT_OPTS_WITH_ARG "tibxyzcF"
+
+/**
+ * Find the -c/--config value before getopt_long() ever runs.
+ *
+ * The named config file has to be loaded *before* the option loop for
+ * CLI flags to win over it (issue #96), but the path is only known once
+ * the arguments have been read — hence this minimal pre-pass. It mirrors
+ * getopt semantics: all four spellings (-c path, -cpath, --config path,
+ * --config=path) plus clustered short options are recognized, "--" ends
+ * option processing, and the last occurrence wins, exactly as the
+ * repeated `opts->config_path = optarg` assignment in the loop does.
+ *
+ * Runs on the unshifted argv: the subcommand token in argv[1] is never
+ * an option, so scanning from index 1 sees the same arguments getopt
+ * will see after parse_dispatch_subcommand() shifts them.
+ *
+ * @return A pointer into argv, or NULL when no --config was given
+ */
+static const char *parse_prescan_config_path(int argc, char *argv[]) {
+    const char *found = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        const char *arg = argv[i];
+
+        if (strcmp(arg, "--") == 0) {
+            break;
+        }
+        if (arg[0] != '-' || arg[1] == '\0') {
+            continue;                    /* operand, or a bare "-" */
+        }
+
+        if (arg[1] == '-') {             /* long option */
+            const char *body = arg + 2;
+            const char *eq   = strchr(body, '=');
+            size_t      len  = eq ? (size_t)(eq - body) : strlen(body);
+            const struct option *o = long_opt_lookup(body, len);
+
+            if (o == NULL) {
+                continue;
+            }
+            if (o->val == 'c') {
+                if (eq != NULL) {
+                    found = eq + 1;
+                } else if (i + 1 < argc) {
+                    found = argv[++i];
+                }
+            } else if (eq == NULL && o->has_arg == required_argument) {
+                i++;                     /* skip the separate argument */
+            }
+            continue;
+        }
+
+        for (const char *p = arg + 1; *p != '\0'; p++) {   /* short cluster */
+            if (*p == 'c') {
+                if (p[1] != '\0') {
+                    found = p + 1;
+                } else if (i + 1 < argc) {
+                    found = argv[++i];
+                }
+                break;
+            }
+            if (strchr(SHORT_OPTS_WITH_ARG, *p) != NULL) {
+                if (p[1] == '\0') {
+                    i++;                 /* argument is the next element */
+                }
+                break;
+            }
+        }
+    }
+    return found;
+}
+
 /**
  * Run the getopt_long loop over the (already shifted) argument vector.
  *
@@ -504,7 +646,6 @@ static int parse_option_loop(int argc, char *argv[], cli_options_t *opts, int su
 
         case 'j':
         case 'J':
-            opts->json          = 1;
             opts->output_format = OUTPUT_FORMAT_JSON;
             break;
 
@@ -562,15 +703,13 @@ void parse_init(cli_options_t *opts) {
 
     opts->quiet           = 0;
     opts->verbose         = 0;
-    opts->json            = 0;
     opts->flows_seconds   = 0;
     opts->config_path     = NULL;
 
-    /* Environment variables (lowest priority — CLI flags override these) */
-    env_apply_int("MMTREADER_JSON", &opts->json);
-    env_apply_int("MMTREADER_NO_COLOR", &opts->no_color);
-    env_apply_int("MMTREADER_QUIET", &opts->quiet);
-
+    /* Environment variables (lowest priority — CLI flags override these).
+     * parse_options() re-applies them once the config files have loaded,
+     * so the net order stays defaults < config < environment < CLI. */
+    parse_apply_env(opts);
 }
 
 int parse_options(int argc, char *argv[], cli_options_t *opts) {
@@ -582,8 +721,12 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
     /* Initialize options to defaults */
     parse_init(opts);
 
-    /* Config file, then environment (lowest priority — CLI flags override) */
-    parse_load_default_config(opts);
+    /* One precedence rule for both config files (issue #96): pre-scan for
+     * -c/--config, load ~/.mmtreader.conf and then that file, re-apply the
+     * environment, and only then run the option loop — so the CLI flags
+     * are written last and win. */
+    opts->config_path = parse_prescan_config_path(argc, argv);
+    parse_load_config_files(opts);
 
     early = parse_dispatch_subcommand(&argc, &argv, opts, prog_name, &subcmd);
     if (early != PARSE_CONTINUE) {
@@ -594,9 +737,6 @@ int parse_options(int argc, char *argv[], cli_options_t *opts) {
     if (early != PARSE_CONTINUE) {
         return early;
     }
-
-    /* Apply custom config file (highest priority after CLI flags) */
-    parse_reload_custom_config(opts);
 
     /* Support positional argument: "capture eth0" without -i */
     if (subcmd == SUBCMD_CAPTURE && !has_input && optind < argc) {
