@@ -50,15 +50,14 @@ sequenceDiagram
         ▼
   core/engine.c
   ├── engine_process_packet() — MMT-DPI classification + extraction
-  ├── packet_handler() — update counters
-  ├── new_ipv4_session_handler() — count sessions
-  └── new_ipv6_session_handler() — count sessions
+  └── flows.c: flows_packet_handler() — record the session (-F only)
         │
         ▼
   core/engine.c (stats aggregation)
+  ├── engine_get_stats() — totals read back from MMT-DPI
   ├── get_protocol_stats() — per-instance stats
-  ├── proto_hierarchy_ids_to_str() — path formatting
-  └── insert_proto_info() — sorted linked list
+  ├── proto_hierarchy_to_str() — path formatting (MMT-DPI)
+  └── proto_info_insert() — sorted linked list
         │
         ▼
   cli/output.c
