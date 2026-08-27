@@ -1,6 +1,6 @@
 # Installing mmtReader
 
-Read this only when `mmtReader --version` fails. mmtReader needs the MMT-DPI library at `/opt/mmt/dpi/` plus libpcap and libconfuse.
+Read this only when `mmtReader --version` fails. mmtReader needs the MMT-DPI library at `/opt/mmt/dpi/` (version 1.8.0 or newer) plus libpcap.
 
 ## 1. Locate an existing build
 
@@ -37,5 +37,6 @@ If `--version` still fails after install, report the exact stderr to the user ra
 | Symptom | Cause and fix |
 |---------|---------------|
 | `MMT-DPI library not found` | MMT-DPI is absent from `/opt/mmt/dpi/` — run the full `sudo ./install.sh` |
-| `libpcap`/`libconfuse` header errors during `make` | Missing dev packages — `sudo apt install libpcap-dev libconfuse-dev` |
+| `libpcap` header errors during `make` | Missing dev package — `sudo apt install libpcap-dev` |
+| `MMT-DPI SDK ≥ 1.8.0 required` from `make` | Installed SDK is too old — reinstall the SDK, or point the build elsewhere with `make MMT_DPI=/path/to/sdk` |
 | `install.sh: Permission denied` | Re-run with `sudo`, after confirming with the user |

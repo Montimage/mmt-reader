@@ -70,39 +70,55 @@ sequenceDiagram
 
 ## Sample Output
 
-**Raw mmtReader output (what the Agent receives):**
+**Raw mmtReader output (what the Agent receives)** — abridged: the classification
+preamble on stderr is omitted and the protocol tables show a representative
+subset of the 37 paths / 28 protocols (every number below is exact):
 
 ```
-mmtReader 0.3.0 (MMT-DPI SDK 1.8.0 (42cac8b7)) - Montimage
-Build: Aug 12 2026 18:32:44
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+|		 MONTIMAGE
+|	 mmtReader version: 0.3.0
+|	 MMT-DPI SDK version: 1.8.0 (42cac8b7)
+|	 ./mmtReader: built Aug 27 2026 12:15:56
+|	 http://montimage.com
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-Protocol Statistics (with path):
-  HTTP          :  5287 pkts,  5967094 data bytes,  5681596 payload bytes
-    TCP.HTTP    :  5287 pkts,  5967094 data bytes,  5681596 payload bytes
-  MSN           :  3735 pkts,  4259140 data bytes,  4057450 payload bytes
-    TCP.MSN     :  3735 pkts,  4259140 data bytes,  4057450 payload bytes
-  SSL           :  3090 pkts,  2771386 data bytes,  2604526 payload bytes
-    TCP.SSL     :  3090 pkts,  2771386 data bytes,  2604526 payload bytes
-  DNS           :   87 pkts,    15154 data bytes,     15154 payload bytes
-    UDP.DNS     :   87 pkts,    15154 data bytes,     15154 payload bytes
-  ICMP          :   34 pkts,     5078 data bytes,      5078 payload bytes
-    ICMP        :   34 pkts,     5078 data bytes,      5078 payload bytes
+- - - - - - MMT-READER STATS - - - - -
 
-Protocol Statistics:
-  HTTP          :  5287 pkts,  5967094 data bytes,  5681596 payload bytes
-  MSN           :  3735 pkts,  4259140 data bytes,  4057450 payload bytes
-  SSL           :  3090 pkts,  2771386 data bytes,  2604526 payload bytes
-  DNS           :   87 pkts,    15154 data bytes,     15154 payload bytes
-  ICMP          :   34 pkts,     5078 data bytes,      5078 payload bytes
+Protocol statistics with the protocol path:
 
-Input Statistics:
-  Packets      :  14261 packets
-  Data Volume  :  9216531 bytes
-  Total Sessions: 679 sessions
-  Protocols    :  28 protocols
-  Duration     :  299 seconds
-  Bandwidth    :  30875.60 bytes/sec
-  PPS          :  47.77 packets/sec
+	#pkts	#volume	#payload	#proto_path
+      5287    5967094    5681596                                         ethernet.ip.tcp.http
+      3515    4204044    4014234                                     ethernet.ip.tcp.http.msn
+      3090    2771386    2604526                                          ethernet.ip.tcp.ssl
+        87      15154      11500                                          ethernet.ip.udp.dns
+        34       5078       3922                                             ethernet.ip.icmp
+      ...        ...        ...                                                           ...
+
+Protocol statistics:
+
+	#pkts	#volume	#payload	#proto_name
+     14261    9216531    9216531 ethernet
+     14243    9215613    9016211 ip
+     13708    9135182    8669110 tcp
+      5287    5967094    5681596 http
+      3735    4259140    4057450 msn
+      3090    2771386    2604526 ssl
+       501      75353      58319 udp
+        87      15154      11500 dns
+        34       5078       3922 icmp
+      ...        ...        ... ...
+
+>>>>>> INPUT STATISTICS <<<<<< 
+
+	Packets: 14261
+	Data: 9216531 bytes
+	Total Sessions: 679
+	Protocols: 28
+	Duration: 299 seconds
+	Bandwidth: 30875.60 bytes/second
+	pps: 47.77 packets/second
+	fps: 2.27 sessions/second
 ```
 
 **What the Agent tells the user:**
@@ -152,17 +168,15 @@ sudo ./install.sh
 **Output the agent receives:**
 
 ```
-Protocol Statistics (with path):
-  HTTP          :  5287 pkts,  5967094 data bytes,  5681596 payload bytes
-    TCP.HTTP    :  5287 pkts,  5967094 data bytes,  5681596 payload bytes
-  MSN           :  3735 pkts,  4259140 data bytes,  4057450 payload bytes
-    TCP.MSN     :  3735 pkts,  4259140 data bytes,  4057450 payload bytes
-  SSL           :  3090 pkts,  2771386 data bytes,  2604526 payload bytes
-    TCP.SSL     :  3090 pkts,  2771386 data bytes,  2604526 payload bytes
-  DNS           :   87 pkts,    15154 data bytes,     15154 payload bytes
-    UDP.DNS     :   87 pkts,    15154 data bytes,     15154 payload bytes
-  ICMP          :   34 pkts,     5078 data bytes,      5078 payload bytes
-    ICMP        :   34 pkts,     5078 data bytes,      5078 payload bytes
+Protocol statistics with the protocol path:
+
+	#pkts	#volume	#payload	#proto_path
+      5287    5967094    5681596                                         ethernet.ip.tcp.http
+      3515    4204044    4014234                                     ethernet.ip.tcp.http.msn
+      3090    2771386    2604526                                          ethernet.ip.tcp.ssl
+        87      15154      11500                                          ethernet.ip.udp.dns
+        34       5078       3922                                             ethernet.ip.icmp
+      ...        ...        ...                                                           ...
 ```
 
 **Question:** "How much traffic is on port 443?"
@@ -198,21 +212,24 @@ Protocol Statistics (with path):
   },
   "protocol_paths": [
     {"packets": 5287, "data_volume": 5967094, "payload_volume": 5681596, "path": "ethernet.ip.tcp.http"},
-    {"packets": 3735, "data_volume": 4259140, "payload_volume": 4057450, "path": "ethernet.ip.tcp.msn"},
+    {"packets": 3515, "data_volume": 4204044, "payload_volume": 4014234, "path": "ethernet.ip.tcp.http.msn"},
     {"packets": 3090, "data_volume": 2771386, "payload_volume": 2604526, "path": "ethernet.ip.tcp.ssl"},
-    {"packets": 87, "data_volume": 15154, "payload_volume": 15154, "path": "ethernet.ip.udp.dns"},
+    {"packets": 87, "data_volume": 15154, "payload_volume": 11500, "path": "ethernet.ip.udp.dns"},
     {"packets": 34, "data_volume": 5078, "payload_volume": 3922, "path": "ethernet.ip.icmp"}
   ],
   "protocols": [
+    {"name": "ethernet", "packets": 14261, "data_volume": 9216531, "payload_volume": 9216531},
+    {"name": "ip", "packets": 14243, "data_volume": 9215613, "payload_volume": 9016211},
+    {"name": "tcp", "packets": 13708, "data_volume": 9135182, "payload_volume": 8669110},
     {"name": "http", "packets": 5287, "data_volume": 5967094, "payload_volume": 5681596},
-    {"name": "msn", "packets": 3735, "data_volume": 4259140, "payload_volume": 4057450},
-    {"name": "ssl", "packets": 3090, "data_volume": 2771386, "payload_volume": 2604526},
-    {"name": "dns", "packets": 87, "data_volume": 15154, "payload_volume": 15154},
-    {"name": "icmp", "packets": 34, "data_volume": 5078, "payload_volume": 3922}
+    {"name": "msn", "packets": 3735, "data_volume": 4259140, "payload_volume": 4057450}
   ],
   "anomalies": []
 }
 ```
+
+`protocol_paths` and `protocols` are abridged above — a full run on
+`smallFlows.pcap` reports 37 paths and 28 protocols.
 
 **Live monitoring:**
 
@@ -234,77 +251,7 @@ sudo ./mmtReader capture -i wlP9s9 -a -s
 | `-a` | Show protocol paths | Off | Full hierarchy (TCP.HTTP) |
 | `-s` | Session counts | Off | Per-protocol session tracking |
 | `--json` | JSON output | Off | Machine-readable output |
-| `-F N` | Top flows (capture only) | Off | Report top N sessions by volume |
-
-**Question:** "How much traffic is on port 443?"
-
-```bash
-# Agent runs with port classification:
-./mmtReader analyze -t capture.pcap -a -z 1
-```
-
-**Question:** "Show me the data in JSON for my dashboard:"
-
-```bash
-# Agent runs with JSON output:
-./mmtReader analyze -t capture.pcap --json -a -s
-```
-
-**JSON output the Agent receives:**
-
-```json
-{
-  "version": {
-    "mmtreader": "0.3.0",
-    "mmt_dpi": "1.8.0 (42cac8b7)"
-  },
-  "input_stats": {
-    "packets": 14261,
-    "data_volume": 9216531,
-    "duration_seconds": 298.51,
-    "bandwidth_bytes_per_sec": 30875.60,
-    "packets_per_sec": 47.77,
-    "total_sessions": 679,
-    "protocols": 28
-  },
-  "protocol_paths": [
-    {"packets": 5287, "data_volume": 5967094, "payload_volume": 5681596, "path": "ethernet.ip.tcp.http"},
-    {"packets": 3735, "data_volume": 4259140, "payload_volume": 4057450, "path": "ethernet.ip.tcp.msn"},
-    {"packets": 3090, "data_volume": 2771386, "payload_volume": 2604526, "path": "ethernet.ip.tcp.ssl"},
-    {"packets": 87, "data_volume": 15154, "payload_volume": 15154, "path": "ethernet.ip.udp.dns"},
-    {"packets": 34, "data_volume": 5078, "payload_volume": 3922, "path": "ethernet.ip.icmp"}
-  ],
-  "protocols": [
-    {"name": "http", "packets": 5287, "data_volume": 5967094, "payload_volume": 5681596},
-    {"name": "msn", "packets": 3735, "data_volume": 4259140, "payload_volume": 4057450},
-    {"name": "ssl", "packets": 3090, "data_volume": 2771386, "payload_volume": 2604526},
-    {"name": "dns", "packets": 87, "data_volume": 15154, "payload_volume": 15154},
-    {"name": "icmp", "packets": 34, "data_volume": 5078, "payload_volume": 3922}
-  ],
-  "anomalies": []
-}
-```
-
-**Live monitoring:**
-
-```bash
-# Agent triggers live capture (Ethernet):
-sudo ./mmtReader capture -i eth0 -a -b 100
-
-# Or on a WiFi interface:
-sudo ./mmtReader capture -i wlP9s9 -a -s
-```
-
-**Classification flags the Agent can toggle:**
-
-| Flag | Classification | Default | Use case |
-|------|---------------|---------|----------|
-| `-x` | IP address fingerprinting | On | Identify services by IP |
-| `-y` | Hostname (SNI) fingerprinting | On | Identify by domain name |
-| `-z` | Port number fingerprinting | On | Identify by port |
-| `-a` | Show protocol paths | Off | Full hierarchy (TCP.HTTP) |
-| `-s` | Session counts | Off | Per-protocol session tracking |
-| `--json` | JSON output | Off | Machine-readable output |
+| `-F <seconds>` | Top flows (capture only) | Off | Capture for N seconds, then print the top sessions by volume |
 
 ## Comparison
 
@@ -395,7 +342,7 @@ MMT-Reader analyzes network traffic from pcap capture files or live network inte
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y build-essential gcc g++ make libpcap-dev libconfuse-dev jq
+sudo apt-get install -y build-essential gcc make libpcap-dev jq
 ```
 
 **RHEL / CentOS / Fedora:**
@@ -407,6 +354,9 @@ sudo yum install libpcap-devel jq
 
 `jq` (≥ 1.7) is a **test-time** requirement only: `make test` pipes the tool's
 JSON output through it. It is not needed to build or run mmtReader itself.
+
+There is no configuration-library dependency — `config.c` implements its own
+INI parser, so no external config library is required or linked.
 
 #### MMT-DPI Library
 
@@ -432,6 +382,30 @@ installed SDK is missing or older (`make check-sdk`).
 ```bash
 make build
 ```
+
+`make` first runs `check-sdk` (aborting when the SDK is missing or older than
+1.8.0), then compiles all nine sources in one `gcc` invocation with
+`-g -O2 -Wall -Wextra` and `-DMMTREADER_VERSION='"0.3.0"'` — the warning gate
+lives in its own `WARNFLAGS` variable so a `make CFLAGS=...` override cannot
+disable it, and the `-D` injects mmtReader's product version separately from
+the MMT-DPI SDK version:
+
+```
+MMT-DPI SDK 1.8.0 OK
+cc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.3.0"' -o mmtReader mmtReader.c core/engine.c ...
+```
+
+#### Test
+
+```bash
+make clean && make test
+```
+
+Runs 14 numbered test groups (plus sub-groups 2b and 5b): 252 unit asserts,
+35/35 CLI integration checks, and 6/6 SDK-check assertions, ending with
+`All tests passed!`. One skip is expected under an unprivileged run — live
+capture on `lo` needs root or `cap_net_raw`. Requires `jq`. See
+[docs/TESTING.md](docs/TESTING.md) for the per-group breakdown.
 
 #### Coverage
 
@@ -621,6 +595,7 @@ mmtReader/
 ├── README.md          # This file
 ├── mmt-reader.png     # Screenshot
 ├── smallFlows.pcap    # Test pcap
+├── CHANGELOG.md       # Live changelog (incl. [Unreleased])
 ├── CONTRIBUTING.md    # How to contribute
 ├── CODE_OF_CONDUCT.md # Contributor Covenant v2.1
 ├── SECURITY.md        # Vulnerability reporting
@@ -635,21 +610,30 @@ mmtReader/
 │   ├── parse.c/h      # Argument parsing, subcommand dispatch
 │   └── output.c/h     # Text/JSON output rendering
 ├── capture.c/h        # Live pcap capture operations
-├── config.c/h         # INI config file support
+├── flows.c/h          # Top-flow tracking and reporting (capture -F)
+├── config.c/h         # INI config file support (hand-rolled parser)
 ├── utils/
 │   ├── version.c/h    # Version banner and display
 │   └── colors.c/h     # ANSI color support
-├── tests/
+├── tests/             # Unit suites + CLI integration script
 │   ├── test_config.c  # Config file parsing tests
 │   ├── test_anomaly.c # Anomaly detection tests
 │   ├── test_parse.c   # CLI parsing tests
-│   └── test_cli.sh    # Integration tests
+│   ├── test_wifi.c    # 802.11 → Ethernet conversion tests
+│   ├── test_flows.c   # Top-flow reporting tests
+│   ├── test_capture_dispatch.c # Capture dispatch tests
+│   ├── test_engine_output.c    # Engine output tests
+│   ├── test_engine_stats.c     # Engine statistics tests
+│   ├── test_sdk_check.sh       # SDK version gate tests
+│   └── test_cli.sh    # CLI integration tests
 └── docs/
     ├── USER_GUIDE.md      # Full CLI reference and examples
     ├── DEVELOPMENT.md     # Build, extend, and debug guide
     ├── ARCHITECTURE.md    # 4-layer architecture diagram
-    ├── CHANGELOG.md       # Version history
+    ├── CHANGELOG.md       # Historical release notes
     ├── CONFIG.md          # Config file reference
+    ├── PLAYBOOK.md        # End-to-end agent workflows
+    ├── DECISIONS.md       # Architecture decision log
     └── TESTING.md         # Test suite guide
 ```
 
@@ -662,7 +646,9 @@ mmtReader/
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 4-layer architecture diagram and data flow |
 | [CONFIG.md](docs/CONFIG.md) | INI config file reference (`~/.mmtreader.conf`) |
 | [TESTING.md](docs/TESTING.md) | Test suite guide and how to run tests |
-| [CHANGELOG.md](docs/CHANGELOG.md) | Version history and release notes |
+| [PLAYBOOK.md](docs/PLAYBOOK.md) | End-to-end agent workflows and JSON recipes |
+| [CHANGELOG.md](CHANGELOG.md) | Live changelog, including the `[Unreleased]` section |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Historical release notes (0.2.x–0.3.0) |
 
 ### Related Publications
 

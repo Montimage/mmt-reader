@@ -1,14 +1,39 @@
 # MMT-Reader Test Suite Guide
 
-MMT-Reader includes unit tests for config parsing and CLI argument parsing, plus integration tests for end-to-end CLI behavior.
+MMT-Reader includes C unit suites for config parsing, CLI parsing, WiFi
+conversion, flow reporting, capture dispatch and engine behavior, plus shell
+integration tests for end-to-end CLI behavior and the SDK version gate.
 
 ## Quick Start
 
 ```bash
-make test
+make clean && make test
 ```
 
-This runs the full test suite: unit tests for config and parsing, integration tests for CLI behavior, and completion file checks.
+`make test` builds the binary first, then runs **14 numbered test groups**
+(plus sub-groups 2b and 5b) defined inline in `Makefile:86-165`. Every unit
+suite is compiled with the same `-Wall -Wextra` warning gate as the product
+build, and the suites that report versions also get
+`-DMMTREADER_VERSION='"0.3.0"'`.
+
+`jq` is required — groups 1–4 pipe the tool's JSON output through it.
+
+### Expected totals
+
+| Signal | Value |
+|--------|-------|
+| Unit asserts (groups 5–11, incl. 5b) | **252** |
+| CLI integration checks (group 12) | **35 / 35** |
+| SDK version-gate checks (group 14) | **6 / 6** |
+| Failures | **0** |
+| Tolerated skips | **1** — live capture on `lo` |
+
+The run ends with `All tests passed!` and exit code 0. The single tolerated
+skip needs root or `cap_net_raw` to disappear (`tests/test_cli.sh:230-243`):
+
+```
+SKIP: live capture on 'lo' unavailable — Couldn't activate device lo: socket: Operation not permitted
+```
 
 ## Coverage
 
@@ -25,15 +50,24 @@ build is untouched; artifacts are cleaned up when the target finishes.
 
 ## Test Targets
 
-| Target | File | Type | Description |
-|--------|------|------|-------------|
-| Test 1 | — | Integration | Text output: `analyze -t smallFlows.pcap -a` produces expected output |
-| Test 2 | — | Integration | JSON output: `--json` produces valid JSON parseable by `jq` |
-| Test 3 | — | Integration | Sessions flag: `--sessions` includes IPv4 session counts |
-| Test 4 | — | Integration | JSON sessions: `--json --sessions` includes per-protocol session counts |
-| Test 5 | `tests/test_config.c` | Unit | Config file parsing (init, load, sections, comments, booleans) |
-| Test 6 | `tests/test_parse.c` | Unit | CLI argument parsing (defaults, subcommands, flags, validation) |
-| Test 7 | `tests/test_cli.sh` | Integration | CLI end-to-end (env vars, quiet, verbose, input validation) |
+| Target | File | Type | Asserts | Description |
+|--------|------|------|---------|-------------|
+| Test 1 | — | Integration | — | Text output: `analyze -t smallFlows.pcap -a`; summary printed exactly once; JSON summary present |
+| Test 2 | — | Integration | — | JSON valid and parseable by `jq`; `version` is an object separating `mmtreader` from `mmt_dpi` |
+| Test 2b | — | Integration | — | `input_stats` agrees with `protocols[]` (volume, protocol count, bandwidth) |
+| Test 3 | — | Integration | — | Sessions flag: `--sessions` includes IPv4 session counts |
+| Test 4 | — | Integration | — | JSON sessions: `--json --sessions` includes per-protocol session counts |
+| Test 5 | `tests/test_config.c` | Unit | 40 | Config file parsing (init, load, sections, comments, booleans) |
+| Test 5b | `tests/test_anomaly.c` | Unit | 9 | Anomaly detection |
+| Test 6 | `tests/test_parse.c` | Unit | 73 | CLI argument parsing (defaults, subcommands, flags, validation) |
+| Test 7 | `tests/test_wifi.c` | Unit | 43 | 802.11 → Ethernet frame conversion |
+| Test 8 | `tests/test_flows.c` | Unit | 38 | Top-flow (session) reporting |
+| Test 9 | `tests/test_capture_dispatch.c` | Unit | 37 | Capture dispatch and packet-data extraction |
+| Test 10 | `tests/test_engine_output.c` | Unit | 7 | Engine output: one summary per run, TEXT/JSON honoured |
+| Test 11 | `tests/test_engine_stats.c` | Unit | 5 | Engine statistics aggregation and extraction-failure accounting |
+| Test 12 | `tests/test_cli.sh` | Integration | 35 | CLI end-to-end (env vars, quiet, verbose, input validation, capture contract) |
+| Test 13 | — | Integration | — | Bash, zsh and fish completion files exist |
+| Test 14 | `tests/test_sdk_check.sh` | Unit | 6 | `make check-sdk` accepts ≥ 1.8.0 and rejects older/missing SDKs |
 
 ## Unit Tests
 
@@ -41,8 +75,11 @@ build is untouched; artifacts are cleaned up when the target finishes.
 
 Tests for `config.c` — INI config file parsing:
 
+Run from the repository root (same command shape `make test` uses):
+
 ```bash
-gcc -g -o test_config test_config.c config.c -I. && ./test_config && rm -f test_config
+gcc -g -Wall -Wextra -o test_config tests/test_config.c config.c -I. \
+  && ./test_config && rm -f test_config
 ```
 
 **Test coverage:**
@@ -59,8 +96,11 @@ gcc -g -o test_config test_config.c config.c -I. && ./test_config && rm -f test_
 
 Tests for `cli/parse.c` — CLI argument parsing:
 
+`cli/parse.c` reads config defaults, so `config.c` must be linked in too:
+
 ```bash
-gcc -g -o test_parse test_parse.c cli/parse.c -I./cli -I./utils && ./test_parse && rm -f test_parse
+gcc -g -Wall -Wextra -o test_parse tests/test_parse.c cli/parse.c config.c -I. -I./utils \
+  && ./test_parse && rm -f test_parse
 ```
 
 **Test coverage:**
@@ -95,6 +135,9 @@ End-to-end CLI behavior tests:
 - **Environment variables** — `MMTREADER_QUIET`, `MMTREADER_NO_COLOR`, `MMTREADER_JSON`
 - **CLI overrides env vars** — `-v` overrides `MMTREADER_QUIET`
 - **General options** — `--help`, `--version`, `-h`, `--json`, short flags
+- **Capture output contract** — live capture on `lo` prints exactly one summary
+  (skipped when the environment forbids opening a capture handle)
+- **Extraction-failure summary** — failures are counted and summarized once
 
 ### Manual Integration Testing
 
@@ -123,7 +166,7 @@ MMTREADER_JSON=1 ./mmtReader analyze -t smallFlows.pcap
 | File | Description |
 |------|-------------|
 | `smallFlows.pcap` | Small pcap capture file for testing |
-| `test.pcap` | Referenced in tests (may be the same as smallFlows.pcap) |
+| `test.pcap` | 54-byte stub pcap used as a filename argument by `tests/test_parse.c` — parsing only, never analyzed |
 
 ## Adding New Tests
 
@@ -132,7 +175,10 @@ MMTREADER_JSON=1 ./mmtReader analyze -t smallFlows.pcap
 1. Add a new `test_*()` function to the appropriate test file
 2. Use the `ASSERT_EQ`, `ASSERT_STR_EQ`, `ASSERT_TRUE`, `ASSERT_FALSE` macros
 3. Call the new function from `main()`
-4. Compile and run: `gcc -g -o test_xxx test_xxx.c source.c -I. && ./test_xxx`
+4. Compile and run from the repo root:
+   `gcc -g -Wall -Wextra -o test_xxx tests/test_xxx.c source.c -I. && ./test_xxx`
+5. Add a numbered group to the `test:` target in the `Makefile` so `make test`
+   runs it, and update the table above
 
 ### Integration Tests
 
@@ -146,9 +192,10 @@ All tests use a simple pass/fail counter:
 
 ```
 === Results ===
-Run:  42
-Pass: 42
+Run:  40
+Pass: 40
 Fail: 0
 ```
 
-The test exits with code 0 if all pass, code 1 if any fail.
+Each suite exits with code 0 if all pass, code 1 if any fail, so the first
+failing group aborts `make test`.

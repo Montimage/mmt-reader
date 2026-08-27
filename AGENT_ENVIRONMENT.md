@@ -65,7 +65,8 @@ SDK**. It is *not* in this repository and *not* on any public package registry.
 If `/opt/mmt/dpi` is missing or empty, `make` fails at link time
 (`mmt_core.h: No such file...` / `cannot find -lmmt_core`). Obtain an SDK
 release from Montimage and unpack it so that `/opt/mmt/dpi/{include,lib}`
-exist. The include/link paths are hardcoded in `Makefile:24-29`.
+exist. The include/link paths derive from the `MMT_DPI` variable (`Makefile:21`,
+used in `Makefile:59-66`); override it with `make MMT_DPI=/path/to/sdk`.
 
 ## Environment variables and config files
 
@@ -88,23 +89,41 @@ against `-lmmt_core -ldl -lpcap` from `/opt/mmt/dpi/lib`. Exit code 0 and an
 executable `./mmtReader` in the repo root = success (<1 s on the reference
 machine). `make clean` removes the binary.
 
+The compile line is (`Makefile:59-66`):
+
+```
+MMT-DPI SDK 1.8.0 OK
+cc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.3.0"' -o mmtReader mmtReader.c core/engine.c ...
+```
+
+Two flags are load-bearing and must stay in any hand-rolled build:
+
+- `-Wall -Wextra` comes from `WARNFLAGS` (`Makefile:13-18`), kept out of
+  `CFLAGS` so an external `make CFLAGS=...` cannot disable the warning gate.
+  The tree is warning-free; a new warning is a regression.
+- `-DMMTREADER_VERSION='"0.3.0"'` comes from `VERSION_DEFS`
+  (`Makefile:24-28`) and injects mmtReader's product version, reported
+  separately from the MMT-DPI SDK version. Without it `utils/version.c`
+  falls back to `0.0.0-dev`.
+
 ## Test
 
 ```sh
 make test
 ```
 
-Builds the binary first (`test:` depends on `build:`), then runs **13 numbered
-test groups** (plus sub-group 2b) defined inline in `Makefile:49-116`:
+Builds the binary first (`test:` depends on `build:`), then runs **14 numbered
+test groups** (plus sub-groups 2b and 5b) defined inline in `Makefile:86-165`:
 
 | Group | What it exercises | Needs jq |
 |---|---|---|
 | Test 1 | Text output + summary printed exactly once | yes |
-| Test 2 / 2b | JSON validity; `input_stats` vs `protocols[]` consistency | yes |
+| Test 2 / 2b | JSON validity; `version` object separates product from SDK; `input_stats` vs `protocols[]` consistency | yes |
 | Test 3 / 4 | `--sessions` flag (text and JSON) | Test 4 only |
-| Tests 5–11 | Unit suites: config (40), parse (39), WiFi conversion (43), flows (38), capture dispatch (24), engine output (7), engine stats (3) asserts | no |
+| Tests 5–11 | Unit suites: config (40), anomaly detection (9, group 5b), parse (73), WiFi conversion (43), flows (38), capture dispatch (37), engine output (7), engine stats (5) asserts | no |
 | Test 12 | CLI integration script `tests/test_cli.sh` — 35 checks | indirectly |
 | Test 13 | Shell-completion files exist | no |
+| Test 14 | SDK version gate — `tests/test_sdk_check.sh`, 6 asserts | no |
 
 Expected success shape (reference run):
 
@@ -115,8 +134,9 @@ Passed: 35 / 35
 All tests passed!           ← final banner, exit code 0
 ```
 
-Totals to expect: **~194 unit asserts** across tests 5–11, **35/35 CLI
-integration checks**, **0 failures**, exactly **one tolerated skip**:
+Totals to expect: **252 unit asserts** across tests 5–11 (incl. sub-group 5b),
+**35/35 CLI integration checks**, **6/6 SDK-check asserts** (test 14), **0
+failures**, exactly **one tolerated skip**:
 
 ```
 SKIP: live capture on 'lo' unavailable — ... Operation not permitted
@@ -124,7 +144,7 @@ SKIP: live capture on 'lo' unavailable — ... Operation not permitted
 
 That skip is `tests/test_cli.sh`'s live-capture check: opening a capture
 handle needs root or `cap_net_raw`, so under an unprivileged agent it skips by
-design (test_cli.sh:212-225) and counts as passed. Running the suite as root
+design (`tests/test_cli.sh:230-243`) and counts as passed. Running the suite as root
 removes the skip but changes nothing else.
 
 ## Coverage
@@ -135,7 +155,8 @@ make coverage
 
 Wires gcov coverage around the existing suite (modernization task 3.1,
 closes `F-TEST-002`): it cleans, reruns the **full** `make test` with the
-unit-test binaries (tests 5–11) rebuilt via `TEST_CFLAGS='-g --coverage'`,
+unit-test binaries (tests 5–11) rebuilt via
+`TEST_CFLAGS='-g --coverage -DCOVERAGE_BUILD'`,
 then summarizes per-source line/branch coverage with plain `gcov`
 (`gcovr`/`lcov` are not needed; plain gcov ships with gcc).
 
