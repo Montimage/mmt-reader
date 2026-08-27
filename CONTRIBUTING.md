@@ -40,7 +40,7 @@ Before filing a bug report:
 ```
 **Version:** MMT-Reader 0.3.0, MMT-DPI <version>
 **OS:** Linux x86_64
-**Command:** ./mmtReader -t capture.pcap -a
+**Command:** ./mmtReader analyze -t capture.pcap -a
 
 **Expected behavior:**
 ...
@@ -93,7 +93,7 @@ Feature requests are welcome. Please include:
 
 ## Code Style
 
-MMT-Reader is a single-file C application. Please follow these conventions:
+MMT-Reader is a modular C application (see `docs/ARCHITECTURE.md`). Please follow these conventions:
 
 ### Naming
 
@@ -146,7 +146,7 @@ sudo ./mmtReader capture -i eth0 -a
 ./mmtReader -h
 
 # 6. Check for memory leaks (if valgrind is available)
-valgrind --leak-check=full ./mmtReader -t smallFlows.pcap -a
+valgrind --leak-check=full ./mmtReader analyze -t smallFlows.pcap -a
 ```
 
 ---
