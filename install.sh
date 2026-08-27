@@ -354,7 +354,7 @@ SRCS="mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/o
 # MMTREADER_VERSION=x.y.z ./install.sh
 if [[ -z "${MMTREADER_VERSION:-}" ]]; then
     MMTREADER_VERSION="$(sed -n 's/^MMTREADER_VERSION[[:space:]]*?\{0,1\}=[[:space:]]*\([^[:space:]]*\).*/\1/p' \
-        "${SCRIPT_DIR}/Makefile" 2>/dev/null | head -n1)"
+        "${SCRIPT_DIR}/Makefile" 2>/dev/null | head -n1 || true)"
 fi
 if [[ -z "${MMTREADER_VERSION}" ]]; then
     warn "Could not read MMTREADER_VERSION from Makefile; falling back to 0.0.0-dev."
@@ -364,7 +364,7 @@ VERSION_DEFS="-DMMTREADER_VERSION=\"${MMTREADER_VERSION}\""
 info "mmtReader product version: ${MMTREADER_VERSION}"
 
 if $DRY_RUN; then
-    echo -e "${YELLOW}[DRY-RUN]${NC} ${CC} ${CFLAGS} ${VERSION_DEFS} -o mmtReader ${SRCS} -I\".\" -I\"${MMT_DPI_INC}\" -I\"./utils\" -I\"./cli\" -L\"${MMT_DPI_LIB}\" -lmmt_core -ldl -lpcap"
+    echo -e "${YELLOW}[DRY-RUN]${NC} ${CC} ${CFLAGS} -DMMTREADER_VERSION='\"${MMTREADER_VERSION}\"' -o mmtReader ${SRCS} -I\".\" -I\"${MMT_DPI_INC}\" -I\"./utils\" -I\"./cli\" -L\"${MMT_DPI_LIB}\" -lmmt_core -ldl -lpcap"
     info "mmtReader would be compiled (dry-run)."
 elif ! ${CC} ${CFLAGS} "${VERSION_DEFS}" -o mmtReader ${SRCS} \
         -I"." -I"${MMT_DPI_INC}" -I"./utils" -I"./cli" \
