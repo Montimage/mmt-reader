@@ -1,6 +1,6 @@
 # Troubleshooting and edge cases
 
-Read this when a run fails the success bar, or when one of the edge cases below applies. Verified against mmtReader 0.3.0 (MMT-DPI SDK 1.8.0 (42cac8b7)).
+Read this when a run fails the success bar, or when one of the edge cases below applies. Verified against mmtReader 0.4.0 (MMT-DPI SDK 1.8.0 (42cac8b7)).
 
 ## Errors
 

@@ -38,7 +38,7 @@ Before filing a bug report:
 3. **File an issue** — Use the GitHub issue tracker with the template below:
 
 ```
-**Version:** MMT-Reader 0.3.0, MMT-DPI <version>
+**Version:** MMT-Reader 0.4.0, MMT-DPI <version>
 **OS:** Linux x86_64
 **Command:** ./mmtReader analyze -t capture.pcap -a
 

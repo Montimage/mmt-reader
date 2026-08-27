@@ -24,7 +24,7 @@ SDK_MIN_VERSION = 1.8.0
 # mmtReader's own product version — distinct from the MMT-DPI SDK version.
 # Injected into every translation unit that reports versions (issue #70,
 # F-BUG-005). Kept in sync with the README version badge.
-MMTREADER_VERSION ?= 0.3.0
+MMTREADER_VERSION ?= 0.4.0
 VERSION_DEFS = -DMMTREADER_VERSION='"$(MMTREADER_VERSION)"'
 
 SRCS        = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c flows.c config.c

@@ -14,7 +14,7 @@ make clean && make test
 (plus sub-groups 2b and 5b) defined inline in `Makefile:86-165`. Every unit
 suite is compiled with the same `-Wall -Wextra` warning gate as the product
 build, and the suites that report versions also get
-`-DMMTREADER_VERSION='"0.3.0"'`.
+`-DMMTREADER_VERSION='"0.4.0"'`.
 
 `jq` is required — groups 1, 2, 2b and 4 pipe the tool's JSON output
 through it (group 3 greps the text output instead).

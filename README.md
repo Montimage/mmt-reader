@@ -1,7 +1,7 @@
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux-blue)
 ![Language](https://img.shields.io/badge/language-C-brightgreen.svg)
-![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)
 
 # Ask about network traffic. Get clear answers.
 
@@ -76,7 +76,7 @@ subset of the 37 paths / 28 protocols (every number below is exact):
 ```
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 |		 MONTIMAGE
-|	 mmtReader version: 0.3.0
+|	 mmtReader version: 0.4.0
 |	 MMT-DPI SDK version: 1.8.0 (42cac8b7)
 |	 ./mmtReader: built Aug 27 2026 12:15:56
 |	 http://montimage.com
@@ -197,7 +197,7 @@ Protocol statistics with the protocol path:
 ```json
 {
   "version": {
-    "mmtreader": "0.3.0",
+    "mmtreader": "0.4.0",
     "mmt_dpi": "1.8.0 (42cac8b7)"
   },
   "input_stats": {
@@ -385,14 +385,14 @@ make build
 
 `make` first runs `check-sdk` (aborting when the SDK is missing or older than
 1.8.0), then compiles all nine sources in one `gcc` invocation with
-`-g -O2 -Wall -Wextra` and `-DMMTREADER_VERSION='"0.3.0"'` — the warning gate
+`-g -O2 -Wall -Wextra` and `-DMMTREADER_VERSION='"0.4.0"'` — the warning gate
 lives in its own `WARNFLAGS` variable so a `make CFLAGS=...` override cannot
 disable it, and the `-D` injects mmtReader's product version separately from
 the MMT-DPI SDK version:
 
 ```
 MMT-DPI SDK 1.8.0 OK
-cc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.3.0"' -o mmtReader mmtReader.c core/engine.c ...
+cc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.4.0"' -o mmtReader mmtReader.c core/engine.c ...
 ```
 
 #### Test
@@ -648,7 +648,7 @@ mmtReader/
 | [TESTING.md](docs/TESTING.md) | Test suite guide and how to run tests |
 | [PLAYBOOK.md](docs/PLAYBOOK.md) | End-to-end agent workflows and JSON recipes |
 | [CHANGELOG.md](CHANGELOG.md) | Live changelog, including the `[Unreleased]` section |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Historical release notes (0.1.0–0.3.0) |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Historical release notes (0.1.0–0.4.0) |
 
 ### Related Publications
 

@@ -93,7 +93,7 @@ The compile line is (`Makefile:59-66`):
 
 ```
 MMT-DPI SDK 1.8.0 OK
-cc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.3.0"' -o mmtReader mmtReader.c core/engine.c ...
+cc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.4.0"' -o mmtReader mmtReader.c core/engine.c ...
 ```
 
 Two flags are load-bearing and must stay in any hand-rolled build:
@@ -101,7 +101,7 @@ Two flags are load-bearing and must stay in any hand-rolled build:
 - `-Wall -Wextra` comes from `WARNFLAGS` (`Makefile:13-18`), kept out of
   `CFLAGS` so an external `make CFLAGS=...` cannot disable the warning gate.
   The tree is warning-free; a new warning is a regression.
-- `-DMMTREADER_VERSION='"0.3.0"'` comes from `VERSION_DEFS`
+- `-DMMTREADER_VERSION='"0.4.0"'` comes from `VERSION_DEFS`
   (`Makefile:24-28`) and injects mmtReader's product version, reported
   separately from the MMT-DPI SDK version. Without it `utils/version.c`
   falls back to `0.0.0-dev`.

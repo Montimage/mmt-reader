@@ -26,7 +26,7 @@ make build && sudo make install       # build without the install script
 ## 3. Verify — installation is done when both commands exit 0
 
 ```bash
-mmtReader --version      # prints "mmtReader version: 0.3.0" and "MMT-DPI SDK version: 1.8.0 (42cac8b7)"
+mmtReader --version      # prints "mmtReader version: 0.4.0" and "MMT-DPI SDK version: 1.8.0 (42cac8b7)"
 mmtReader analyze -h     # prints help with no error
 ```
 

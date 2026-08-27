@@ -229,7 +229,7 @@ MMTREADER_NO_COLOR=1 ./mmtReader analyze -t smallFlows.pcap -a
 ```
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 |		 MONTIMAGE
-|	 mmtReader version: 0.3.0
+|	 mmtReader version: 0.4.0
 |	 MMT-DPI SDK version: 1.8.0 (42cac8b7)
 |	 ./mmtReader: built Aug 27 2026 16:24:52
 |	 http://montimage.com
@@ -362,7 +362,7 @@ MMTREADER_NO_COLOR=1 ./mmtReader analyze -t smallFlows.pcap -a -j -s
 ```json
 {
   "version": {
-    "mmtreader": "0.3.0",
+    "mmtreader": "0.4.0",
     "mmt_dpi": "1.8.0 (42cac8b7)"
   },
   "input_stats": {

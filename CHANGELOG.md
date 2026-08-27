@@ -1,5 +1,39 @@
 # Changelog
 
+## [v0.4.0] - 2026-01-01
+
+### Features
+- Add GitHub Actions workflow, retire Bitbucket notifications (#90)
+- Wire gcov coverage into the build (#82)
+
+### Bug Fixes
+- Honor `json` from config file and `MMTREADER_JSON` environment variable (#98)
+- Report product version distinctly from SDK version in `--version` banner (#93)
+- Rename shadowed `rc` variable in online capture loop (#89)
+- Restore `.deb` fallback via `compgen` glob expansion (#86)
+- Remove `eval`-built command strings and add adversarial smoke proof (#85)
+- Graceful SIGTERM stop and extraction-failure summary (#84)
+- Fix config precedence for env vars and prevent buffer overflow (#83)
+- Restore Jenkins test stage running `make test` (#79)
+- Groundwork: Jenkins make, SDK pin, test wiring (#78)
+
+### Refactoring
+- Named dispatch modes, `PROTO_META`, `PRIu64` (#92)
+- Split `parse_options` into layered helpers (#91)
+- Dead-code sweep across engine, cli, config, colors (#88)
+- Extract shared assert header `tests/test_util.h` (#80)
+
+### Documentation
+- Regenerate user-guide and architecture samples from real output (#99)
+- Align README and DEVELOPMENT docs with the real build (#95)
+- Document `cap_net_raw` capability tradeoff (#81)
+- Add `CLAUDE.md` and `AGENTS.md` agent config files (#77)
+- Document agent install/run notes for the C toolchain (#76)
+
+### Build / CI
+- Enable `-Wall -Wextra` and verify the tree is warning-free (#94)
+- Pin base image and bump toolchain to current GCC (#87)
+
 ## [Unreleased]
 
 ### Fixed
@@ -28,7 +62,7 @@
 
 - **Breaking (JSON):** the `--json` `"version"` field changed from a bare string
   holding the SDK version to an object:
-  `{"mmtreader": "0.3.0", "mmt_dpi": "1.8.0 (42cac8b7)"}`. Consumers reading
+  `{"mmtreader": "0.4.0", "mmt_dpi": "1.8.0 (42cac8b7)"}`. Consumers reading
   `.version` as a string must read `.version.mmt_dpi` instead.
 
 ### Documentation

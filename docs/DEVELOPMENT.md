@@ -74,7 +74,7 @@ SRCS      = mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c
 CC       ?= gcc
 CFLAGS   ?= -g -O2
 WARNFLAGS ?= -Wall -Wextra
-MMTREADER_VERSION ?= 0.3.0
+MMTREADER_VERSION ?= 0.4.0
 VERSION_DEFS = -DMMTREADER_VERSION='"$(MMTREADER_VERSION)"'
 ```
 
@@ -94,7 +94,7 @@ Equivalent to what `make` runs — note `flows.c`, the warning flags, and the
 version define:
 
 ```bash
-gcc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.3.0"' -o mmtReader \
+gcc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.4.0"' -o mmtReader \
     mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c flows.c config.c \
     -I. -I/opt/mmt/dpi/include -I./utils -I./cli \
     -L/opt/mmt/dpi/lib \
@@ -124,7 +124,7 @@ file mmtReader
 
 ```
 MMT-DPI SDK 1.8.0 OK
-cc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.3.0"' -o mmtReader mmtReader.c core/engine.c ...
+cc -g -O2 -Wall -Wextra -DMMTREADER_VERSION='"0.4.0"' -o mmtReader mmtReader.c core/engine.c ...
 ```
 
 `./mmtReader --version` prints the boxed MONTIMAGE banner, then reports the
@@ -132,7 +132,7 @@ product and SDK versions distinctly (tail of the output):
 
 ```
 ...
-mmtReader version: 0.3.0
+mmtReader version: 0.4.0
 MMT-DPI SDK version: 1.8.0 (42cac8b7)
 built Aug 27 2026 12:15:56
 ```
@@ -259,7 +259,7 @@ if (value != NULL) {
 Build an unoptimized binary with the same source list, then run it under gdb:
 
 ```bash
-gcc -g -O0 -Wall -Wextra -DMMTREADER_VERSION='"0.3.0"' -o mmtReader-debug \
+gcc -g -O0 -Wall -Wextra -DMMTREADER_VERSION='"0.4.0"' -o mmtReader-debug \
     mmtReader.c core/engine.c utils/version.c utils/colors.c cli/parse.c cli/output.c capture.c flows.c config.c \
     -I. -I/opt/mmt/dpi/include -I./utils -I./cli \
     -L/opt/mmt/dpi/lib \
