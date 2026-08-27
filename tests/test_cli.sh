@@ -168,10 +168,19 @@ out=$( MMTREADER_NO_COLOR=1 "$BINARY" analyze -t smallFlows.pcap 2>&1 )
 # We check that the output doesn't contain obvious color codes
 assert_output_contains "MMTREADER_NO_COLOR still shows results" "MMT-READER STATS" "$out"
 
-# MMTREADER_JSON=1 should set the json flag (no error)
-out=$( MMTREADER_JSON=1 "$BINARY" analyze -t smallFlows.pcap 2>&1 )
-rc=$?
+# MMTREADER_JSON=1 must actually produce JSON on stdout (issue #96), not
+# merely exit 0 — the env var used to write a field nothing behavioral read.
+# The banner goes to stderr under JSON, so stdout is one bare document.
+set +e
+rc=0
+out=$( MMTREADER_JSON=1 "$BINARY" analyze -t smallFlows.pcap 2>/dev/null ) || rc=$?
+jq_rc=0
+jq -e 'has("input_stats")' <<< "$out" > /dev/null 2>&1 || jq_rc=$?
+set -e
 assert_exit_code "MMTREADER_JSON=1 does not cause error" 0 "$rc"
+assert_exit_code "MMTREADER_JSON=1 writes JSON to stdout" 0 "$jq_rc"
+assert_output_not_contains "MMTREADER_JSON=1 suppresses the text table" \
+    "MMT-READER STATS" "$out"
 
 # CLI flags override env vars
 out=$( MMTREADER_QUIET=1 "$BINARY" analyze -t smallFlows.pcap -v 2>&1 )
@@ -202,10 +211,17 @@ assert_output_contains "top-level -h shows general help" "MMT-READER" "$out"
 out=$( "$BINARY" 2>&1 )
 assert_output_contains "no subcommand shows general help" "MMT-READER" "$out"
 
-# --json flag
-out=$( "$BINARY" analyze -t smallFlows.pcap --json 2>&1 )
-rc=$?
+# --json flag — assert the OUTPUT, not just the exit code
+set +e
+rc=0
+out=$( "$BINARY" analyze -t smallFlows.pcap --json 2>/dev/null ) || rc=$?
+jq_rc=0
+jq -e 'has("input_stats")' <<< "$out" > /dev/null 2>&1 || jq_rc=$?
+set -e
 assert_exit_code "--json flag does not cause error" 0 "$rc"
+assert_exit_code "--json writes JSON to stdout" 0 "$jq_rc"
+assert_output_not_contains "--json suppresses the text table" \
+    "MMT-READER STATS" "$out"
 
 # Short flags
 out=$( "$BINARY" analyze -t smallFlows.pcap -q 2>&1 )
@@ -356,6 +372,87 @@ assert_occurrence_count "malformed pcap yields exactly one failure line" \
 assert_output_contains "the failure line carries the packet total" \
     "3 packet(s)" "$out"
 rm -rf "$MAL_TMP"
+
+# ---- Issue #96: config/env output format and precedence ----
+echo ""
+echo "--- Issue #96: config/env JSON output and precedence ---"
+
+# Two defects, one behavioral change. The `json` config key and
+# MMTREADER_JSON wrote a cli_options_t field nothing behavioral read, so
+# both were silently ignored. And a -c/--config file was re-applied AFTER
+# the option loop, so it beat explicit CLI flags. Both config paths now
+# load before the loop, under one rule:
+#   defaults < ~/.mmtreader.conf < --config file < environment < CLI flags
+CONF_TMP=$( mktemp -d )
+printf 'json = 1\n'                                > "$CONF_TMP/json.conf"
+printf 'buffer = 777\nverbose = 0\nno_color = 0\n' > "$CONF_TMP/flags.conf"
+
+# A config file setting json = 1 produces JSON
+set +e
+rc=0
+out=$( "$BINARY" analyze -t smallFlows.pcap --config "$CONF_TMP/json.conf" 2>/dev/null ) || rc=$?
+jq_rc=0
+jq -e 'has("input_stats")' <<< "$out" > /dev/null 2>&1 || jq_rc=$?
+set -e
+assert_exit_code "config json=1 exits 0" 0 "$rc"
+assert_output_not_contains "config json=1 suppresses the text table" \
+    "MMT-READER STATS" "$out"
+assert_exit_code "config json=1 writes JSON to stdout" 0 "$jq_rc"
+
+# ... and an explicit --text overrides it
+set +e
+rc=0
+out=$( "$BINARY" analyze -t smallFlows.pcap --config "$CONF_TMP/json.conf" --text 2>/dev/null ) || rc=$?
+set -e
+assert_exit_code "config json=1 with --text exits 0" 0 "$rc"
+assert_output_contains "--text overrides config json=1" "MMT-READER STATS" "$out"
+assert_output_not_contains "--text leaves no JSON document on stdout" \
+    '"input_stats"' "$out"
+
+# An explicit --json overrides MMTREADER_JSON=0
+set +e
+rc=0
+out=$( MMTREADER_JSON=0 "$BINARY" analyze -t smallFlows.pcap --json 2>/dev/null ) || rc=$?
+jq_rc=0
+jq -e 'has("input_stats")' <<< "$out" > /dev/null 2>&1 || jq_rc=$?
+set -e
+assert_exit_code "MMTREADER_JSON=0 with --json exits 0" 0 "$rc"
+assert_exit_code "--json overrides MMTREADER_JSON=0" 0 "$jq_rc"
+
+# An out-of-range value still selects JSON — never a bogus format
+set +e
+out=$( MMTREADER_JSON=5 "$BINARY" analyze -t smallFlows.pcap 2>/dev/null )
+jq_rc=0
+jq -e 'has("input_stats")' <<< "$out" > /dev/null 2>&1 || jq_rc=$?
+set -e
+assert_exit_code "MMTREADER_JSON=5 normalizes to JSON output" 0 "$jq_rc"
+
+# The environment sits between the config files and the CLI, so it beats
+# a --config file too — the old post-loop reload skipped it entirely.
+set +e
+out=$( MMTREADER_JSON=0 "$BINARY" analyze -t smallFlows.pcap --config "$CONF_TMP/json.conf" 2>/dev/null )
+set -e
+assert_output_contains "MMTREADER_JSON=0 overrides config json=1" \
+    "MMT-READER STATS" "$out"
+
+# Regression: CLI flags beat a conflicting --config file. -v proves it by
+# printing at all; the flag summary it prints proves -C won as well.
+set +e
+out=$( "$BINARY" analyze -t smallFlows.pcap -v -C --config "$CONF_TMP/flags.conf" 2>&1 > /dev/null )
+set -e
+assert_output_contains "-v beats config verbose=0" "DEBUG: verbose mode enabled" "$out"
+assert_output_contains "-C beats config no_color=0" "no_color=1" "$out"
+
+# -b beats config buffer=777. buffer_mb only reaches the live-capture
+# path, but its INFO line is printed before the handle is opened, so this
+# holds whether or not the environment allows opening the interface.
+set +e
+out=$( "$BINARY" capture -i "$CAPTURE_IF" -F 1 -b 100 --config "$CONF_TMP/flags.conf" 2>&1 > /dev/null )
+set -e
+assert_output_contains "-b 100 beats config buffer=777" \
+    "INFO: Use buffer size: 100 (MB)" "$out"
+
+rm -rf "$CONF_TMP"
 
 # ---- Summary ----
 echo ""
