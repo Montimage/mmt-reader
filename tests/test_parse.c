@@ -30,7 +30,7 @@ static void test_parse_init_defaults(void) {
     ASSERT_EQ(0, opts.no_color, "no_color should be 0");
     ASSERT_EQ(0, opts.quiet, "quiet should be 0");
     ASSERT_EQ(0, opts.verbose, "verbose should be 0");
-    ASSERT_EQ(0, opts.json, "json should be 0");
+    ASSERT_EQ(OUTPUT_FORMAT_TEXT, opts.output_format, "output_format should be text");
 }
 
 /* ---- parse_options tests ---- */
@@ -134,7 +134,7 @@ static void test_parse_json_flag(void) {
     parse_init(&opts);
     int rc = parse_options(argc, argv, &opts);
     ASSERT_EQ(PARSE_EXIT_OK, rc, "--json returns OK");
-    ASSERT_EQ(1, opts.json, "--json sets json=1");
+    ASSERT_EQ(OUTPUT_FORMAT_JSON, opts.output_format, "--json sets output_format=json");
 }
 
 static void test_parse_no_color_flag(void) {
@@ -312,7 +312,8 @@ static void test_config_survives_unset_env(void) {
     int rc = parse_analyze_test_pcap(&opts);
 
     ASSERT_EQ(PARSE_EXIT_OK, rc, "analyze parses with config-only settings");
-    ASSERT_EQ(1, opts.json, "config json=1 survives unset MMTREADER_JSON");
+    ASSERT_EQ(OUTPUT_FORMAT_JSON, opts.output_format,
+              "config json=1 survives unset MMTREADER_JSON");
     ASSERT_EQ(1, opts.quiet, "config quiet=1 survives unset MMTREADER_QUIET");
     ASSERT_EQ(1, opts.no_color, "config no_color=1 survives unset MMTREADER_NO_COLOR");
     ASSERT_EQ(1, opts.verbose, "config verbose=1 survives (no env var exists)");
@@ -342,7 +343,8 @@ static void test_set_env_overrides_config(void) {
 
     ASSERT_EQ(PARSE_EXIT_OK, rc, "analyze parses with env + config settings");
     ASSERT_EQ(1, opts.quiet, "set MMTREADER_QUIET=1 overrides config quiet=0");
-    ASSERT_EQ(0, opts.json, "config json=0 kept when MMTREADER_JSON is unset");
+    ASSERT_EQ(OUTPUT_FORMAT_TEXT, opts.output_format,
+              "config json=0 kept when MMTREADER_JSON is unset");
     ASSERT_EQ(50, opts.buffer_mb, "config buffer=50 kept (no env override)");
 
     restore_home(saved_home);
@@ -369,7 +371,8 @@ static void test_env_zero_overrides_config_conflict(void) {
     int rc = parse_analyze_test_pcap(&opts);
 
     ASSERT_EQ(PARSE_EXIT_OK, rc, "analyze parses in conflicting case");
-    ASSERT_EQ(0, opts.json, "explicit MMTREADER_JSON=0 overrides config json=1");
+    ASSERT_EQ(OUTPUT_FORMAT_TEXT, opts.output_format,
+              "explicit MMTREADER_JSON=0 overrides config json=1");
 
     restore_home(saved_home);
     free(saved_home);

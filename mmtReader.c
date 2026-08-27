@@ -91,7 +91,8 @@ int main(int argc, char **argv) {
     if (opts.verbose) {
         fprintf(stderr, "DEBUG: verbose mode enabled\n");
         fprintf(stderr, "DEBUG: json output=%d, quiet=%d, no_color=%d\n",
-                opts.json, opts.quiet, opts.no_color);
+                opts.output_format == OUTPUT_FORMAT_JSON,
+                opts.quiet, opts.no_color);
     }
 
     /* Create engine */
