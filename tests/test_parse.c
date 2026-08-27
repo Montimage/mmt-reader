@@ -207,6 +207,21 @@ static void test_parse_flows_seconds(void) {
     ASSERT_EQ(5, opts.flows_seconds, "-F 5 sets flows_seconds=5");
 }
 
+/*
+ * --flows has no upper bound: parse_bounded_int_arg() is shared with -b but is
+ * called with LONG_MAX here, which a strtol() result can never exceed. Pin that
+ * so a future tightening of the shared helper cannot silently cap --flows.
+ */
+static void test_parse_flows_seconds_large(void) {
+    char *argv[] = { "mmtReader", "capture", "-i", "eth0", "-F", "2000000000" };
+    cli_options_t opts;
+
+    parse_init(&opts);
+    int rc = parse_options(6, argv, &opts);
+    ASSERT_EQ(PARSE_EXIT_OK, rc, "capture -F 2000000000 returns OK (no upper bound)");
+    ASSERT_EQ(2000000000, opts.flows_seconds, "-F 2000000000 sets flows_seconds unclamped");
+}
+
 static void test_parse_classify_flags_zero(void) {
     char *argv[] = { "mmtReader", "analyze", "-t", "test.pcap",
                      "-x", "0", "-y", "0", "-z", "0" };
@@ -404,6 +419,7 @@ int main(void) {
     test_parse_proto_path();
     test_parse_buffer_size_bounds();
     test_parse_flows_seconds();
+    test_parse_flows_seconds_large();
     test_parse_classify_flags_zero();
     test_parse_classify_flags_one();
     test_config_survives_unset_env();
